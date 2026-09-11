@@ -1,0 +1,138 @@
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useNavigate } from "react-router-dom";
+import { detectQuery, startScan, type QueryType } from "../lib/api";
+
+const TYPES: { id: QueryType; label: string }[] = [
+  { id: "auto", label: "Auto-detect" },
+  { id: "email", label: "Email" },
+  { id: "phone", label: "Phone" },
+  { id: "username", label: "Username" },
+  { id: "name", label: "Full name" },
+];
+
+const DEMOS = [
+  { label: "example@example.com", query: "example@example.com", type: "email" as QueryType },
+  { label: "torvalds", query: "torvalds", type: "username" as QueryType },
+  { label: "+1 202 456 1111", query: "+1 202 456 1111", type: "phone" as QueryType },
+  { label: "Ada Lovelace", query: "Ada Lovelace", type: "name" as QueryType },
+];
+
+export function Home() {
+  const navigate = useNavigate();
+  const [query, setQuery] = useState("");
+  const [type, setType] = useState<QueryType>("auto");
+  const [guess, setGuess] = useState<string>("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (query.trim().length < 3) {
+      setGuess("");
+      return;
+    }
+    const handle = window.setTimeout(() => {
+      detectQuery(query, type)
+        .then((d) => {
+          const t = d.query.type;
+          const extra = d.query.email || d.query.phone_e164 || d.query.username || d.query.name;
+          setGuess(`Detected ${t}${extra ? ` · ${extra}` : ""}`);
+        })
+        .catch(() => setGuess(""));
+    }, 280);
+    return () => window.clearTimeout(handle);
+  }, [query, type]);
+
+  const canSubmit = useMemo(() => query.trim().length >= 2 && !busy, [query, busy]);
+
+  async function onSubmit(event?: FormEvent) {
+    event?.preventDefault();
+    if (!canSubmit) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const started = await startScan(query.trim(), type);
+      navigate(`/scan/${started.job_id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not start scan");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div>
+      <section className="hero">
+        <p className="kicker">Self-hosted · public sources only</p>
+        <h2>People lookup from open-source OSINT — not a secret dossier.</h2>
+        <p className="lede">
+          Enter a name, email, phone, or username. Modules such as Holehe, Sherlock,
+          Gravatar, and phone metadata run in parallel and stream into a single
+          report. Empty results stay empty. Nothing is written to disk by default.
+        </p>
+      </section>
+
+      <form className="search-card" onSubmit={onSubmit}>
+        <div className="search-row">
+          <input
+            autoFocus
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="name, email, phone, or @username"
+            aria-label="Search query"
+          />
+          <button type="submit" disabled={!canSubmit}>
+            {busy ? "Queuing…" : "Run report"}
+          </button>
+        </div>
+        <div className="type-row">
+          {TYPES.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={type === item.id ? "on" : ""}
+              onClick={() => setType(item.id)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+        {guess && <p className="hint">{guess}</p>}
+        {error && <div className="error-banner">{error}</div>}
+        <div className="demo-row">
+          {DEMOS.map((demo) => (
+            <button
+              key={demo.label}
+              type="button"
+              onClick={() => {
+                setQuery(demo.query);
+                setType(demo.type);
+              }}
+            >
+              Demo: {demo.label}
+            </button>
+          ))}
+        </div>
+      </form>
+
+      <div className="grid-2">
+        <article className="panel">
+          <h3>What this can do</h3>
+          <ul className="limits">
+            <li>See which public sites appear to have an email or username.</li>
+            <li>Pull a Gravatar photo and self-published profile if one exists.</li>
+            <li>Parse a phone into country, carrier dataset, and line type.</li>
+            <li>Hand you Google / DuckDuckGo / LinkedIn dorks for manual follow-up.</li>
+          </ul>
+        </article>
+        <article className="panel">
+          <h3>What this cannot do</h3>
+          <ul className="limits">
+            <li>No current home address, SSN, or government file from a name alone.</li>
+            <li>No Spokeo / BeenVerified / Dehashed / credential-dump integrations.</li>
+            <li>No login to private accounts. Rate-limits will look like misses.</li>
+            <li>HIBP and Numverify stay skipped unless you add your own API keys.</li>
+          </ul>
+        </article>
+      </div>
+    </div>
+  );
+}

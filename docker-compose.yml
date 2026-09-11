@@ -1,0 +1,13 @@
+services:
+  osint-desk:
+    build: .
+    ports:
+      - "43145:8742"
+    environment:
+      HIBP_API_KEY: ${HIBP_API_KEY:-}
+      NUMVERIFY_API_KEY: ${NUMVERIFY_API_KEY:-}
+      SHERLOCK_FULL: ${SHERLOCK_FULL:-}
+      SHERLOCK_NSFW: ${SHERLOCK_NSFW:-}
+      HOLEHE_TIMEOUT: ${HOLEHE_TIMEOUT:-75}
+      SHERLOCK_TIMEOUT: ${SHERLOCK_TIMEOUT:-90}
+    restart: unless-stopped

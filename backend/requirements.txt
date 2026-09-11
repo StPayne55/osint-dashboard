@@ -1,0 +1,17 @@
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+httpx>=0.27.0
+dnspython>=2.6.0
+phonenumbers>=8.13.0
+pydantic>=2.9.0
+python-multipart>=0.0.12
+aiohttp>=3.10.0
+beautifulsoup4>=4.12.0
+trio>=0.26.0
+holehe>=1.61
+sherlock-project>=0.15.0
+socialscan>=2.0.0
+ignorant>=1.2
+# theHarvester: PyPI 0.0.1 is an empty stub; current git requires Python 3.14
+# and 4.6.0 pins conflicting FastAPI versions. The harvester scanner calls
+# crt.sh + HackerTarget and shells out to a `theHarvester` binary if present.
