@@ -35,7 +35,7 @@ export function Home() {
         .then((d) => {
           const t = d.query.type;
           const extra = d.query.email || d.query.phone_e164 || d.query.username || d.query.name;
-          setGuess(`Detected ${t}${extra ? ` · ${extra}` : ""}`);
+          setGuess(`> classified as ${t}${extra ? ` · ${extra}` : ""}`);
         })
         .catch(() => setGuess(""));
     }, 280);
@@ -61,7 +61,7 @@ export function Home() {
   return (
     <div>
       <section className="hero">
-        <p className="kicker">Self-hosted · public sources only</p>
+        <p className="kicker">Self-hosted // public sources only</p>
         <h2>People lookup from open-source OSINT — not a secret dossier.</h2>
         <p className="lede">
           Enter a name, email, phone, or username. Modules such as Holehe, Sherlock,
@@ -70,17 +70,29 @@ export function Home() {
         </p>
       </section>
 
-      <form className="search-card" onSubmit={onSubmit}>
+      <form className="search-card glass" onSubmit={onSubmit}>
+        <div className="term-chrome">
+          <div className="term-dots" aria-hidden>
+            <i />
+            <i />
+            <i />
+          </div>
+          <span>session://lookup</span>
+        </div>
         <div className="search-row">
-          <input
-            autoFocus
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="name, email, phone, or @username"
-            aria-label="Search query"
-          />
+          <label className={`term-input${query ? " has-value" : ""}`}>
+            <span className="term-prompt">root@desk:~$</span>
+            <input
+              autoFocus
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="name, email, phone, or @username"
+              aria-label="Search query"
+            />
+            <span className="caret" aria-hidden />
+          </label>
           <button type="submit" disabled={!canSubmit}>
-            {busy ? "Queuing…" : "Run report"}
+            {busy ? "Queuing…" : "Initialize"}
           </button>
         </div>
         <div className="type-row">
@@ -107,7 +119,7 @@ export function Home() {
                 setType(demo.type);
               }}
             >
-              Demo: {demo.label}
+              load {demo.label}
             </button>
           ))}
         </div>
@@ -123,7 +135,7 @@ export function Home() {
             <li>Hand you Google / DuckDuckGo / LinkedIn dorks for manual follow-up.</li>
           </ul>
         </article>
-        <article className="panel">
+        <article className="panel danger">
           <h3>What this cannot do</h3>
           <ul className="limits">
             <li>No current home address, SSN, or government file from a name alone.</li>

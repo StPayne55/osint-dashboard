@@ -7,13 +7,16 @@ import { ReportPage } from "./pages/Report";
 export default function App() {
   return (
     <div className="app-shell">
+      <div className="fx-grid" aria-hidden />
+      <div className="fx-scan" aria-hidden />
+      <div className="fx-vignette" aria-hidden />
       <EthicsNotice />
       <header className="topbar">
         <NavLink to="/" className="brand">
           <div className="brand-mark">OD</div>
           <div>
             <h1>OSINT Desk</h1>
-            <p>Local public-source lookup</p>
+            <p>// local public-source node</p>
           </div>
         </NavLink>
         <nav className="nav">
@@ -21,7 +24,7 @@ export default function App() {
             Lookup
           </NavLink>
           <NavLink to="/catalog">Catalog</NavLink>
-          <span className="pill">no persistence</span>
+          <span className="pill">no persist</span>
         </nav>
       </header>
       <main>

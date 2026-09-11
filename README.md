@@ -76,7 +76,7 @@ The in-app **Catalog** page repeats this list from the live backend (`GET /api/c
 
 ## UI
 
-Dark “intel desk” layout: amber on near-black, live module rail on the report page, ethical-use modal on first visit, catalog of every scanner. Screenshots are optional; run the app and use Lookup → a demo chip → watch modules flip from queued to success/empty.
+Cyberpunk desk: near-black field, cyan/magenta/acid-green neon, glass panels, CRT grain, blinking terminal cursor on search, and LED ticks on the live module rail. Ethical-use modal on first visit. Catalog lists every scanner. Run Lookup → a demo chip → watch SCANNING… complete.
 
 ## Ethics
 

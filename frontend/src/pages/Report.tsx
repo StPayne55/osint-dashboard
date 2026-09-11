@@ -105,6 +105,8 @@ export function ReportPage() {
 
   const allFindings = useMemo(() => Object.values(findings).flat(), [findings]);
   const running = modules.some((m) => m.status === "running" || m.status === "queued");
+  const done = modules.filter((m) => !["queued", "running"].includes(m.status)).length;
+  const pct = modules.length ? Math.round((done / modules.length) * 100) : 0;
 
   if (error) {
     return (
@@ -115,14 +117,14 @@ export function ReportPage() {
   }
 
   if (!report) {
-    return <p className="hint">Opening scan…</p>;
+    return <p className="hint">bootstrapping scan pipe…</p>;
   }
 
   return (
     <div>
       <div className="report-head">
         <div>
-          <p className="kicker">{running ? "Live collection" : "Report"}</p>
+          <p className="kicker">{running ? "Live uplink" : "Packet complete"}</p>
           <h2>{report.query.raw}</h2>
           <p className="meta">
             type {report.query.type}
@@ -143,6 +145,17 @@ export function ReportPage() {
         </div>
       </div>
 
+      <div className={`scan-banner${running ? "" : " done"}`}>
+        <span className="scan-label">{running ? "SCANNING" : "COMPLETE"}</span>
+        {running && <span className="caret" aria-hidden />}
+        <div className="scan-bar" aria-hidden>
+          <i style={{ width: `${pct}%` }} />
+        </div>
+        <span className="meta">
+          {done}/{modules.length || 0} modules · {pct}%
+        </span>
+      </div>
+
       <div className="identity">
         <div className="stat">
           <b>{uniq(allFindings, "email").length || (report.query.email ? 1 : 0)}</b>
@@ -157,19 +170,25 @@ export function ReportPage() {
           <span>Images</span>
         </div>
         <div className="stat">
-          <b>{modules.filter((m) => m.status === "success" || m.status === "empty").length}/{modules.length}</b>
+          <b>
+            {modules.filter((m) => m.status === "success" || m.status === "empty").length}/
+            {modules.length}
+          </b>
           <span>Modules done</span>
         </div>
       </div>
 
       <div className="layout">
         <aside className="mod-list">
-          <h3>Module status</h3>
+          <h3>Module ticks</h3>
           {modules.map((mod) => (
             <div className="mod" key={mod.id}>
-              <div>
-                <div className="name">{mod.name}</div>
-                <div className="hint">{mod.summary || "Waiting"}</div>
+              <div className="mod-left">
+                <span className={`led ${mod.status}`} aria-hidden />
+                <div>
+                  <div className="name">{mod.name}</div>
+                  <div className="hint">{mod.summary || (mod.status === "running" ? "probing…" : "queued")}</div>
+                </div>
               </div>
               <div className={`status ${mod.status}`}>{mod.status}</div>
             </div>

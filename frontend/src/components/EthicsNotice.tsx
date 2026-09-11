@@ -14,7 +14,7 @@ export function EthicsNotice() {
   return (
     <div className="modal-backdrop" role="dialog" aria-labelledby="ethics-title">
       <div className="modal">
-        <p className="kicker">Use policy</p>
+        <p className="kicker">Access protocol</p>
         <h2 id="ethics-title">Ethical use required</h2>
         <p>
           OSINT Desk only queries public endpoints and open-source tools. It is
