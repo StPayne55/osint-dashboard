@@ -188,8 +188,7 @@ async def run_job(job: Job) -> None:
 
 async def _run_scanner(job: Job, scanner: Scanner) -> None:
     skip = scanner.skip_reason(job.query)
-    # Optional-key scanners still run so they can emit the skip finding.
-    if skip and scanner.optional_key is None and not scanner.applicable(job.query):
+    if skip and not scanner.applicable(job.query):
         result = scanner._result("skipped", skip)
         job.results[scanner.id] = result
         job.emit({"type": "scanner", "id": scanner.id, "status": "skipped", "result": result.model_dump()})

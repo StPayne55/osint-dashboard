@@ -17,7 +17,7 @@ class UsernameCandidateScanner(Scanner):
     timeout = 2.0
 
     def applicable(self, query: Query) -> bool:
-        return True
+        return bool(query.username or query.username_candidates)
 
     async def run(self, query: Query) -> ScannerResult:
         findings = [

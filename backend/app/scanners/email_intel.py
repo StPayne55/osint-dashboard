@@ -148,6 +148,8 @@ class EmailIntelScanner(Scanner):
             records = []
             for rdata in answers:
                 host = str(rdata.exchange).rstrip(".")
+                if not host:
+                    host = "(null MX — domain does not accept mail)"
                 records.append({"priority": int(rdata.preference), "host": host})
             records.sort(key=lambda r: r["priority"])
             return {"records": records}
