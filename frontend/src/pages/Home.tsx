@@ -92,7 +92,7 @@ export function Home() {
             <span className="caret" aria-hidden />
           </label>
           <button type="submit" disabled={!canSubmit}>
-            {busy ? "Queuing…" : "Initialize"}
+            {busy ? "Queuing…" : "Scan"}
           </button>
         </div>
         <div className="type-row">

@@ -1,9 +1,9 @@
 :root {
   --bg: #05060a;
   --bg-2: #080b14;
-  --text: #e8f4ff;
-  --muted: #9eb0c4;
-  --dim: #6d8096;
+  --text: #f2f7ff;
+  --muted: #c2d0e0;
+  --dim: #8b9db0;
   --cyan: #00f0ff;
   --cyan-dim: rgba(0, 240, 255, 0.14);
   --magenta: #ff2bd6;
@@ -15,8 +15,8 @@
   --green: #39ff9a;
   --rose: #ff4d7a;
   --rose-dim: rgba(255, 77, 122, 0.16);
-  --glass: rgba(8, 14, 26, 0.62);
-  --glass-strong: rgba(10, 16, 30, 0.78);
+  --glass: rgba(10, 16, 28, 0.78);
+  --glass-strong: rgba(8, 12, 22, 0.88);
   --line: rgba(0, 240, 255, 0.22);
   --line-hot: rgba(255, 43, 214, 0.35);
   --display: "Orbitron", "Segoe UI", sans-serif;
@@ -91,11 +91,10 @@ select {
 .fx-scan {
   background: repeating-linear-gradient(
     to bottom,
-    transparent 0 2px,
-    rgba(0, 0, 0, 0.18) 2px 3px
+    transparent 0 3px,
+    rgba(0, 0, 0, 0.12) 3px 4px
   );
-  opacity: 0.22;
-  mix-blend-mode: multiply;
+  opacity: 0.14;
 }
 
 .fx-vignette {
@@ -155,7 +154,8 @@ main {
   margin: 0;
   font-family: var(--display);
   font-size: 15px;
-  letter-spacing: 0.2em;
+  letter-spacing: 0.22em;
+  word-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--text);
 }
@@ -220,12 +220,12 @@ main {
 .hero h2,
 .report-head h2 {
   margin: 0 0 10px;
-  font-family: var(--display);
-  font-size: clamp(26px, 5vw, 42px);
-  letter-spacing: 0.02em;
-  line-height: 1.15;
-  text-transform: uppercase;
-  text-shadow: 0 0 22px rgba(0, 240, 255, 0.18);
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: clamp(26px, 5vw, 40px);
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  text-shadow: 0 0 22px rgba(0, 240, 255, 0.12);
 }
 
 .hero .lede {
@@ -382,9 +382,10 @@ main {
   color: #041218;
   border: 0;
   padding: 0 18px;
-  font-family: var(--display);
+  font-family: var(--mono);
   font-weight: 700;
   letter-spacing: 0.08em;
+  word-spacing: 0.12em;
   text-transform: uppercase;
   cursor: pointer;
   box-shadow: 0 0 18px rgba(0, 240, 255, 0.28);
@@ -501,9 +502,10 @@ a.btn:hover {
 .catalog h3,
 .mod-list h3 {
   margin: 0 0 8px;
-  font-family: var(--display);
+  font-family: var(--mono);
   font-size: 13px;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.14em;
+  word-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--cyan);
 }
@@ -840,16 +842,22 @@ a.btn:hover {
 .modal h2 {
   margin: 0 0 10px;
   color: var(--cyan);
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  font-size: 16px;
-  font-family: var(--display);
+  font-size: 18px;
+  font-family: var(--sans);
+  font-weight: 600;
 }
 
 .modal p,
 .modal ul {
-  color: var(--muted);
-  line-height: 1.55;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.modal .btn {
+  clip-path: none;
+  padding: 12px 18px;
 }
 
 .modal-actions {
@@ -867,6 +875,20 @@ a.btn:hover {
 .catalog article h3 {
   color: var(--text);
   font-size: 16px;
+  letter-spacing: 0.08em;
+}
+
+.catalog article::after {
+  content: "";
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 12px;
+  height: 12px;
+  border: 1px solid var(--magenta);
+  border-left: 0;
+  border-top: 0;
+  pointer-events: none;
 }
 
 .tags {
