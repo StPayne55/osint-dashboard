@@ -1,0 +1,768 @@
+{
+  "license": [
+    "CC0-1.0 from WebBreacher/WhatsMyName"
+  ],
+  "authors": [
+    "OSINT Desk high-signal slice"
+  ],
+  "sites": [
+    {
+      "name": "GitHub (User)",
+      "uri_check": "https://api.github.com/users/{account}",
+      "uri_pretty": "https://github.com/{account}",
+      "e_code": 200,
+      "e_string": "\"id\":",
+      "m_string": "\"status\": \"404\"",
+      "m_code": 404,
+      "cat": "coding"
+    },
+    {
+      "name": "GitHub (Gists)",
+      "uri_check": "https://api.github.com/users/{account}/gists",
+      "uri_pretty": "https://gist.github.com/{account}",
+      "e_code": 200,
+      "e_string": "\"id\":",
+      "m_string": "\"status\": \"404\"",
+      "m_code": 404,
+      "cat": "coding"
+    },
+    {
+      "name": "GitLab",
+      "uri_check": "https://gitlab.com/api/v4/users?username={account}",
+      "uri_pretty": "https://gitlab.com/{account}",
+      "e_code": 200,
+      "e_string": "\"id\":",
+      "m_string": "[]",
+      "m_code": 200,
+      "cat": "coding"
+    },
+    {
+      "name": "Bitbucket",
+      "uri_check": "https://bitbucket.org/!api/2.0/repositories/{account}?page=1&pagelen=25&sort=-updated_on&q=&fields=-values.owner%2C-values.workspace",
+      "uri_pretty": "https://bitbucket.org/{account}/workspace/repositories/",
+      "e_code": 200,
+      "e_string": "full_name",
+      "m_string": "No workspace with identifier",
+      "m_code": 404,
+      "cat": "coding"
+    },
+    {
+      "name": "Gitea",
+      "uri_check": "https://gitea.com/api/v1/users/{account}",
+      "uri_pretty": "https://gitea.com/{account}",
+      "e_code": 200,
+      "e_string": "\"id\":",
+      "m_string": "\"message\":\"user redirect does not exist",
+      "m_code": 404,
+      "cat": "coding"
+    },
+    {
+      "name": "Gitee",
+      "uri_check": "https://gitee.com/{account}",
+      "e_code": 200,
+      "e_string": "class=\"ui container user_page\"",
+      "m_string": "class=\"container error midCenter\"",
+      "m_code": 404,
+      "cat": "coding"
+    },
+    {
+      "name": "X",
+      "uri_check": "https://api.x.com/i/users/username_available.json?username={account}",
+      "uri_pretty": "https://x.com/{account}",
+      "e_code": 200,
+      "e_string": "\"reason\":\"taken\"",
+      "m_string": "\"reason\":\"available\"",
+      "m_code": 200,
+      "cat": "social"
+    },
+    {
+      "name": "Instagram",
+      "uri_check": "https://www.instagram.com/{account}/",
+      "e_code": 200,
+      "e_string": "Posts - See Instagram photos and videos from",
+      "m_string": "\"routePath\":null",
+      "m_code": 200,
+      "cat": "social"
+    },
+    {
+      "name": "TikTok",
+      "uri_check": "https://www.tiktok.com/oembed?url=https://www.tiktok.com/@{account}",
+      "uri_pretty": "https://www.tiktok.com/@{account}?lang=en",
+      "e_code": 200,
+      "e_string": "\"author_url\":",
+      "m_string": "\"code\":400",
+      "m_code": 400,
+      "cat": "social"
+    },
+    {
+      "name": "YouTube User2",
+      "uri_check": "https://www.youtube.com/@{account}",
+      "e_code": 200,
+      "e_string": "canonicalBaseUrl",
+      "m_string": "<title>404 Not Found</title>",
+      "m_code": 404,
+      "cat": "video"
+    },
+    {
+      "name": "YouTube User",
+      "uri_check": "https://www.youtube.com/user/{account}/about",
+      "e_code": 200,
+      "e_string": "joinedDateText",
+      "m_string": "<title>404 Not Found",
+      "m_code": 404,
+      "cat": "video"
+    },
+    {
+      "name": "YouTube Channel",
+      "uri_check": "https://www.youtube.com/c/{account}/about",
+      "e_code": 200,
+      "e_string": "joinedDateText",
+      "m_string": "<title>404 Not Found",
+      "m_code": 404,
+      "cat": "video"
+    },
+    {
+      "name": "Twitch",
+      "uri_check": "https://twitchtracker.com/{account}",
+      "uri_pretty": "https://twitch.tv/{account}/",
+      "e_code": 200,
+      "e_string": "Overview</a>",
+      "m_string": "<title>404 Page Not Found",
+      "m_code": 404,
+      "cat": "gaming"
+    },
+    {
+      "name": "Facebook",
+      "uri_check": "https://www.facebook.com/{account}/",
+      "e_code": 200,
+      "e_string": "__isProfile",
+      "m_string": "<title>Facebook</title>",
+      "m_code": 200,
+      "cat": "social"
+    },
+    {
+      "name": "Pinterest",
+      "uri_check": "https://www.pinterest.com/{account}/",
+      "e_code": 200,
+      "e_string": " - Profile | Pinterest",
+      "m_string": "id=\"home-main-title",
+      "m_code": 301,
+      "cat": "social"
+    },
+    {
+      "name": "tumblr",
+      "uri_check": "https://www.tumblr.com/{account}",
+      "e_code": 200,
+      "e_string": "\"queryKey\":[\"user-info",
+      "m_string": "\"status\":404",
+      "m_code": 404,
+      "cat": "images"
+    },
+    {
+      "name": "Medium",
+      "uri_check": "https://medium.com/@{account}/about",
+      "e_code": 200,
+      "e_string": "Medium member since",
+      "m_string": "Out of nothing, something",
+      "m_code": 404,
+      "cat": "news"
+    },
+    {
+      "name": "dev.to",
+      "uri_check": "https://dev.to/api/users/by_username?url={account}",
+      "uri_pretty": "https://dev.to/{account}",
+      "e_code": 200,
+      "e_string": "\"id\":",
+      "m_string": "\"status\":404",
+      "m_code": 404,
+      "cat": "coding"
+    },
+    {
+      "name": "Hacker News",
+      "uri_check": "https://hacker-news.firebaseio.com/v0/user/{account}.json?print=pretty",
+      "uri_pretty": "https://news.ycombinator.com/user?id={account}",
+      "e_code": 200,
+      "e_string": "\"id\" :",
+      "m_string": "null",
+      "m_code": 200,
+      "cat": "tech"
+    },
+    {
+      "name": "Reddit",
+      "uri_check": "https://www.reddit.com/user/{account}/about.json",
+      "uri_pretty": "https://www.reddit.com/user/{account}",
+      "e_code": 200,
+      "e_string": "\"id\":",
+      "m_string": "\"error\":404",
+      "m_code": 404,
+      "cat": "social"
+    },
+    {
+      "name": "Steam",
+      "uri_check": "https://steamcommunity.com/id/{account}",
+      "e_code": 200,
+      "e_string": "g_rgProfileData =",
+      "m_string": "Steam Community :: Error",
+      "m_code": 200,
+      "cat": "gaming"
+    },
+    {
+      "name": "Spotify",
+      "uri_check": "https://open.spotify.com/user/{account}",
+      "e_code": 200,
+      "e_string": "content=\"profile\"",
+      "m_string": "Page not found",
+      "m_code": 404,
+      "cat": "music"
+    },
+    {
+      "name": "SoundCloud",
+      "uri_check": "https://soundcloud.com/{account}",
+      "e_code": 200,
+      "e_string": "\"hydratable\":\"user\"",
+      "m_string": "<title>SoundCloud - Hear the world\u2019s sounds</title>",
+      "m_code": 404,
+      "cat": "music"
+    },
+    {
+      "name": "Last.fm",
+      "uri_check": "https://www.last.fm/user/{account}",
+      "e_code": 200,
+      "e_string": "class=\"header-info\"",
+      "m_string": "<h1>404 - Page Not Found</h1>",
+      "m_code": 404,
+      "cat": "music"
+    },
+    {
+      "name": "Flickr",
+      "uri_check": "https://www.flickr.com/photos/{account}/",
+      "e_code": 200,
+      "e_string": "| Flickr",
+      "m_string": "",
+      "m_code": 404,
+      "cat": "images"
+    },
+    {
+      "name": "Behance",
+      "uri_check": "https://www.behance.net/{account}",
+      "e_code": 200,
+      "e_string": "\"entityOwners\":[{\"username",
+      "m_string": "\"entityOwners\":[]",
+      "m_code": 404,
+      "cat": "business"
+    },
+    {
+      "name": "Dribbble",
+      "uri_check": "https://dribbble.com/{account}",
+      "e_code": 200,
+      "e_string": " | Dribbble",
+      "m_string": "(404)</title>",
+      "m_code": 404,
+      "cat": "art"
+    },
+    {
+      "name": "Patreon",
+      "uri_check": "https://www.patreon.com/{account}",
+      "e_code": 200,
+      "e_string": "full_name\":",
+      "m_string": "errorCode\": 404,",
+      "m_code": 404,
+      "cat": "finance"
+    },
+    {
+      "name": "Keybase",
+      "uri_check": "https://keybase.io/_/api/1.0/user/lookup.json?usernames={account}",
+      "uri_pretty": "https://keybase.io/{account}",
+      "e_code": 200,
+      "e_string": "\"id\":",
+      "m_string": "\"them\":[null]",
+      "m_code": 200,
+      "cat": "social"
+    },
+    {
+      "name": "about.me",
+      "uri_check": "https://about.me/{account}",
+      "e_code": 200,
+      "e_string": " | about.me",
+      "m_string": "<title>about.me</title>",
+      "m_code": 404,
+      "cat": "social"
+    },
+    {
+      "name": "VK",
+      "uri_check": "https://vk.com/{account}",
+      "e_code": 200,
+      "e_string": "content=\"profile\"",
+      "m_string": "404 Not Found",
+      "m_code": 404,
+      "cat": "social"
+    },
+    {
+      "name": "Telegram",
+      "uri_check": "https://t.me/{account}",
+      "e_code": 200,
+      "e_string": "tgme_page_title",
+      "m_string": "noindex, nofollow",
+      "m_code": 200,
+      "cat": "social"
+    },
+    {
+      "name": "Snapchat",
+      "uri_check": "https://www.snapchat.com/@{account}",
+      "e_code": 200,
+      "e_string": "is on Snapchat!",
+      "m_string": "NOT_FOUND",
+      "m_code": 200,
+      "cat": "social"
+    },
+    {
+      "name": "Threads",
+      "uri_check": "https://www.threads.com/@{account}",
+      "e_code": 200,
+      "e_string": "\"username\":",
+      "m_string": "",
+      "m_code": 302,
+      "cat": "social"
+    },
+    {
+      "name": "Bluesky Username",
+      "uri_check": "https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile?actor={account}.bsky.social",
+      "uri_pretty": "https://bsky.app/profile/{account}.bsky.social",
+      "e_code": 200,
+      "e_string": "\"handle\":\"",
+      "m_string": "\"message\":\"Profile not found\"",
+      "m_code": 400,
+      "cat": "social"
+    },
+    {
+      "name": "Producthunt",
+      "uri_check": "https://www.producthunt.com/@{account}",
+      "e_code": 200,
+      "e_string": "s profile on Product Hunt",
+      "m_string": "Product Hunt - All newest Products",
+      "m_code": 404,
+      "cat": "business"
+    },
+    {
+      "name": "npm",
+      "uri_check": "https://www.npmjs.com/~{account}",
+      "e_code": 200,
+      "e_string": "\"id\":",
+      "m_string": "<h1>not found</h1>",
+      "m_code": 404,
+      "cat": "coding"
+    },
+    {
+      "name": "Docker Hub (User)",
+      "uri_check": "https://hub.docker.com/v2/users/{account}/",
+      "uri_pretty": "https://hub.docker.com/u/{account}",
+      "e_code": 200,
+      "e_string": "\"uuid\":",
+      "m_string": "\"message\":\"User not found\"",
+      "m_code": 404,
+      "cat": "coding"
+    },
+    {
+      "name": "LeetCode",
+      "uri_check": "https://leetcode.com/graphql/",
+      "uri_pretty": "https://leetcode.com/u/{account}/",
+      "e_code": 200,
+      "e_string": "\"username\":",
+      "m_string": "\"matchedUser\":null",
+      "m_code": 200,
+      "cat": "coding"
+    },
+    {
+      "name": "CodePen",
+      "uri_check": "https://codepen.io/{account}",
+      "e_code": 200,
+      "e_string": "property=\"og:url\"",
+      "m_string": "data-test-id=\"text-404\"",
+      "m_code": 404,
+      "cat": "coding"
+    },
+    {
+      "name": "Replit",
+      "uri_check": "https://replit.com/@{account}",
+      "e_code": 200,
+      "e_string": "\"__typename\":\"User\"",
+      "m_string": "\"statusCode\":404",
+      "m_code": 404,
+      "cat": "coding"
+    },
+    {
+      "name": "HackerRank",
+      "uri_check": "https://www.hackerrank.com/rest/contests/master/hackers/{account}/profile",
+      "uri_pretty": "https://www.hackerrank.com/profile/{account}",
+      "e_code": 200,
+      "e_string": "\"model\":",
+      "m_string": "\"error\":\"Not Found\"",
+      "m_code": 404,
+      "cat": "tech"
+    },
+    {
+      "name": "Kaggle",
+      "uri_check": "https://www.kaggle.com/{account}",
+      "e_code": 200,
+      "e_string": "property=\"og:username\"",
+      "m_string": "<title>Kaggle: Your Home for Data Science</title>",
+      "m_code": 404,
+      "cat": "coding"
+    },
+    {
+      "name": "Letterboxd",
+      "uri_check": "https://letterboxd.com/{account}/",
+      "e_code": 200,
+      "e_string": "\u2019s profile on Letterboxd",
+      "m_string": "Sorry, we can\u2019t find the page you\u2019ve requested.",
+      "m_code": 404,
+      "cat": "social"
+    },
+    {
+      "name": "Chess.com",
+      "uri_check": "https://api.chess.com/pub/player/{account}",
+      "uri_pretty": "https://www.chess.com/member/{account}",
+      "e_code": 200,
+      "e_string": "\"player_id\":",
+      "m_string": "\"code\":0",
+      "m_code": 404,
+      "cat": "gaming"
+    },
+    {
+      "name": "Roblox",
+      "uri_check": "https://auth.roblox.com/v1/usernames/validate?username={account}&birthday=2019-12-31T23:00:00.000Z",
+      "uri_pretty": "https://www.roblox.com/search/users?keyword={account}",
+      "e_code": 200,
+      "e_string": "Username is already in use",
+      "m_string": "Username is valid",
+      "m_code": 200,
+      "cat": "gaming"
+    },
+    {
+      "name": "Quora",
+      "uri_check": "https://www.quora.com/profile/{account}",
+      "e_code": 200,
+      "e_string": "Credentials",
+      "m_string": "Page Not Found",
+      "m_code": 301,
+      "cat": "social"
+    },
+    {
+      "name": "Slideshare",
+      "uri_check": "https://www.slideshare.net/{account}",
+      "e_code": 200,
+      "e_string": "data-testid=\"report-button\"",
+      "m_string": "id=\"username-available\"",
+      "m_code": 200,
+      "cat": "social"
+    },
+    {
+      "name": "WordPress.com (Public)",
+      "uri_check": "https://public-api.wordpress.com/rest/v1.1/sites/{account}.wordpress.com",
+      "uri_pretty": "https://{account}.wordpress.com",
+      "e_code": 200,
+      "e_string": "\"ID\":",
+      "m_string": "\"error\":\"unknown_blog\"",
+      "m_code": 404,
+      "cat": "blog"
+    },
+    {
+      "name": "WordPress.org (Profiles)",
+      "uri_check": "https://login.wordpress.org/wp-json/wporg/v1/username-available/{account}",
+      "uri_pretty": "https://profiles.wordpress.org/{account}/",
+      "e_code": 200,
+      "e_string": "\"error\":\"That username is already in use.",
+      "m_string": "\"available\":true",
+      "m_code": 200,
+      "cat": "blog"
+    },
+    {
+      "name": "Mastodon.online",
+      "uri_check": "https://mastodon.online/@{account}",
+      "e_code": 200,
+      "e_string": "@mastodon.online) - Mastodon</title>",
+      "m_string": "<title>The page you are looking for isn&#39;t here.",
+      "m_code": 404,
+      "cat": "social"
+    },
+    {
+      "name": "HackerOne",
+      "uri_check": "https://hackerone.com/graphql",
+      "uri_pretty": "https://hackerone.com/{account}",
+      "e_code": 200,
+      "e_string": "\"username\":",
+      "m_string": "\"type\":\"NOT_FOUND\"",
+      "m_code": 200,
+      "cat": "tech"
+    },
+    {
+      "name": "TryHackMe",
+      "uri_check": "https://tryhackme.com/api/user/exist/{account}",
+      "uri_pretty": "https://tryhackme.com/r/p/{account}",
+      "e_code": 200,
+      "e_string": "\"success\":true",
+      "m_string": "\"success\":false",
+      "m_code": 200,
+      "cat": "tech"
+    },
+    {
+      "name": "Linktree",
+      "uri_check": "https://linktr.ee/{account}",
+      "e_code": 200,
+      "e_string": "\"uuid\":",
+      "m_string": "\"statusCode\":404",
+      "m_code": 404,
+      "cat": "social"
+    },
+    {
+      "name": "Ko-Fi",
+      "uri_check": "https://ko-fi.com/{account}",
+      "e_code": 200,
+      "e_string": "id=\"profile-header\"",
+      "m_string": "<title>Object moved</title>",
+      "m_code": 302,
+      "cat": "social"
+    },
+    {
+      "name": "Substack",
+      "uri_check": "https://substack.com/api/v1/user/{account}/public_profile",
+      "uri_pretty": "https://substack.com/@{account}",
+      "e_code": 200,
+      "e_string": "\"id\":",
+      "m_string": "\"error\":\"profile not found\"",
+      "m_code": 404,
+      "cat": "social"
+    },
+    {
+      "name": "Hashnode",
+      "uri_check": "https://gql.hashnode.com/",
+      "uri_pretty": "https://hashnode.com/@{account}",
+      "e_code": 200,
+      "e_string": "\"id\":",
+      "m_string": "\"user\":null",
+      "m_code": 200,
+      "cat": "tech"
+    },
+    {
+      "name": "Disqus",
+      "uri_check": "https://disqus.com/api/3.0/users/details?user=username:{account}&api_key=E8Uh5l5fHZ6gD8U3KycjAIAk46f68Zw7C6eW8WSjZvCLXebZ7p0r1yrYDrLilk2F",
+      "uri_pretty": "https://disqus.com/by/{account}/",
+      "e_code": 200,
+      "e_string": "\"code\":0",
+      "m_string": "\"code\":2",
+      "m_code": 400,
+      "cat": "social"
+    },
+    {
+      "name": "Vimeo",
+      "uri_check": "https://vimeo.com/{account}",
+      "e_code": 200,
+      "e_string": "og:type",
+      "m_string": "VimeUhOh",
+      "m_code": 404,
+      "cat": "video"
+    },
+    {
+      "name": "Dailymotion",
+      "uri_check": "https://api.dailymotion.com/user/{account}?fields=id,username,screenname,description,avatar_720_url,cover_250_url,followers_total,following_total,videos_total,country,created_time,verified,url",
+      "uri_pretty": "https://www.dailymotion.com/user/{account}",
+      "e_code": 200,
+      "e_string": "\"id\":",
+      "m_string": "\"code\":404",
+      "m_code": 404,
+      "cat": "video"
+    },
+    {
+      "name": "Imgur",
+      "uri_check": "https://api.imgur.com/account/v1/accounts/{account}?client_id=546c25a59c58ad7",
+      "uri_pretty": "https://imgur.com/user/{account}/about",
+      "e_code": 200,
+      "e_string": "\"username\":",
+      "m_string": "\"code\":\"404\"",
+      "m_code": 404,
+      "cat": "images"
+    },
+    {
+      "name": "Wattpad",
+      "uri_check": "https://www.wattpad.com/api/v3/users/{account}",
+      "uri_pretty": "https://www.wattpad.com/user/{account}",
+      "e_code": 200,
+      "e_string": "\"username\":",
+      "m_string": "\"error_code\":",
+      "m_code": 400,
+      "cat": "social"
+    },
+    {
+      "name": "MyAnimeList",
+      "uri_check": "https://myanimelist.net/profile/{account}",
+      "e_code": 200,
+      "e_string": "Profile - MyAnimeList.net",
+      "m_string": "<title>404 Not Found",
+      "m_code": 404,
+      "cat": "social"
+    },
+    {
+      "name": "AniList",
+      "uri_check": "https://graphql.anilist.co",
+      "uri_pretty": "https://anilist.co/user/{account}",
+      "e_code": 200,
+      "e_string": "\"id\":",
+      "m_string": "Not Found",
+      "m_code": 404,
+      "cat": "social"
+    },
+    {
+      "name": "Duolingo",
+      "uri_check": "https://www.duolingo.com/2017-06-30/users?username={account}&_=1628308619574",
+      "uri_pretty": "https://www.duolingo.com/profile/{account}",
+      "e_code": 200,
+      "e_string": "joinedClassroomIds",
+      "m_string": "\"users\" : []",
+      "m_code": 200,
+      "cat": "hobby"
+    },
+    {
+      "name": "Strava",
+      "uri_check": "https://www.strava.com/athletes/{account}",
+      "e_code": 301,
+      "e_string": "/athletes/",
+      "m_string": "\"page\":\"/404\"",
+      "m_code": 404,
+      "cat": "social"
+    },
+    {
+      "name": "Xbox Gamertag",
+      "uri_check": "https://www.xboxgamertag.com/search/{account}",
+      "e_code": 200,
+      "e_string": "Games Played",
+      "m_string": "Gamertag doesn't exist",
+      "m_code": 404,
+      "cat": "gaming"
+    },
+    {
+      "name": "Playstation Network",
+      "uri_check": "https://psnprofiles.com/xhr/search/users?q={account}",
+      "uri_pretty": "https://psnprofiles.com/{account}",
+      "e_code": 200,
+      "e_string": "<div class=\"progress-bar small level\">",
+      "m_string": "We couldn't find anything ",
+      "m_code": 200,
+      "cat": "gaming"
+    },
+    {
+      "name": "Codecademy",
+      "uri_check": "https://www.codecademy.com/profiles/{account}",
+      "e_code": 200,
+      "e_string": "\"type\":\"User\"",
+      "m_string": "\"type\":\"UserNotFound\"",
+      "m_code": 200,
+      "cat": "coding"
+    },
+    {
+      "name": "freeCodeCamp",
+      "uri_check": "https://api.freecodecamp.org/users/get-public-profile?username={account}",
+      "uri_pretty": "https://www.freecodecamp.org/{account}",
+      "e_code": 200,
+      "e_string": "\"user\":",
+      "m_string": "{}",
+      "m_code": 404,
+      "cat": "coding"
+    },
+    {
+      "name": "Codewars",
+      "uri_check": "https://www.codewars.com/api/v1/users/{account}",
+      "uri_pretty": "https://www.codewars.com/users/{account}",
+      "e_code": 200,
+      "e_string": "\"id\":",
+      "m_string": "\"reason\":\"not found\"",
+      "m_code": 404,
+      "cat": "coding"
+    },
+    {
+      "name": "Topcoder",
+      "uri_check": "https://api.topcoder.com/v5/members/{account}",
+      "uri_pretty": "https://profiles.topcoder.com/{account}",
+      "e_code": 200,
+      "e_string": "\"userId\":",
+      "m_string": "\"message\":\"Member with handle:",
+      "m_code": 404,
+      "cat": "coding"
+    },
+    {
+      "name": "AtCoder",
+      "uri_check": "https://atcoder.jp/users/{account}",
+      "e_code": 200,
+      "e_string": "<h3>Contest Status</h3>",
+      "m_string": ">404 Page Not Found</h1>",
+      "m_code": 404,
+      "cat": "coding"
+    },
+    {
+      "name": "Codeforces",
+      "uri_check": "https://codeforces.com/api/user.info?handles={account}",
+      "uri_pretty": "https://codeforces.com/profile/{account}",
+      "e_code": 200,
+      "e_string": "\"status\":\"OK\"",
+      "m_string": "\"status\":\"FAILED\"",
+      "m_code": 400,
+      "cat": "coding"
+    },
+    {
+      "name": "hackerearth",
+      "uri_check": "https://www.hackerearth.com/@{account}",
+      "e_code": 200,
+      "e_string": "| Developer Profile on HackerEarth",
+      "m_string": "404 | HackerEarth",
+      "m_code": 200,
+      "cat": "coding"
+    },
+    {
+      "name": "Issuu",
+      "uri_check": "https://issuu.com/call/signup/v2/check-username/{account}",
+      "uri_pretty": "https://issuu.com/{account}",
+      "e_code": 200,
+      "e_string": "\"status\":\"unavailable\"",
+      "m_string": "\"status\":\"available\"",
+      "m_code": 200,
+      "cat": "social"
+    },
+    {
+      "name": "Researchgate",
+      "uri_check": "https://www.researchgate.net/profile/{account}",
+      "e_code": 200,
+      "e_string": " | ",
+      "m_string": "20+ million researchers on ResearchGate",
+      "m_code": 301,
+      "cat": "hobby"
+    },
+    {
+      "name": "Gravatar",
+      "uri_check": "https://en.gravatar.com/{account}.json",
+      "uri_pretty": "https://en.gravatar.com/{account}",
+      "e_code": 200,
+      "e_string": "entry",
+      "m_string": "User not found",
+      "m_code": 404,
+      "cat": "images"
+    },
+    {
+      "name": "Independent academia",
+      "uri_check": "https://independent.academia.edu/{account}",
+      "e_code": 200,
+      "e_string": "- Academia.edu",
+      "m_string": "Academia.edu",
+      "m_code": 404,
+      "cat": "hobby"
+    },
+    {
+      "name": "Scribd (Document)",
+      "uri_check": "https://www.scribd.com/search/query?query={account}&verbatim=true",
+      "uri_pretty": "https://www.scribd.com/search?query={account}&verbatim=true",
+      "e_code": 200,
+      "e_string": "\"compilationId\":\"",
+      "m_string": "\"compilationId\":null",
+      "m_code": 200,
+      "cat": "hobby"
+    }
+  ]
+}

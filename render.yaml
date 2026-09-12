@@ -32,8 +32,10 @@ services:
       # Remote mode is enabled by SPIDERFOOT_URL + SPIDERFOOT_RUNNER_TOKEN above.
       - key: SPIDERFOOT_ENABLED
         value: "0"
+      # 120s is enough once Account Finder skips the 715-site distrust sweep
+      # and caps WhatsMyName. Salvage still returns partials if the wall fires.
       - key: SPIDERFOOT_TIMEOUT
-        value: "180"
+        value: "120"
       - key: HEAVY_SCANNER_CONCURRENCY
         value: "1"
 
@@ -52,3 +54,12 @@ services:
         value: /opt/spiderfoot
       - key: SPIDERFOOT_MAX_THREADS
         value: "8"
+      # Skip sfp_accounts checkSites(random_user) against the full WMN list.
+      # e_code / e_string already reject sites that match garbage usernames.
+      - key: SPIDERFOOT_SKIP_DISTRUST
+        value: "1"
+      # High-signal cap (Sherlock/Maigret overlap first). 0 = full ~715 sites.
+      - key: SPIDERFOOT_ACCOUNTS_MAX_SITES
+        value: "120"
+      - key: SPIDERFOOT_CACHE
+        value: /opt/spiderfoot/cache

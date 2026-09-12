@@ -22,7 +22,7 @@ RUN pip install --no-cache-dir -r /app/backend/requirements.txt
 # Flask/CherryPy pins cannot collide with FastAPI. Costs ~200–400MB; pass
 # --build-arg INSTALL_SPIDERFOOT=0 to skip. On Render, prefer the separate
 # spiderfoot-runner service instead of invoking sf.py in this web process.
-COPY docker/spiderfoot-requirements.txt docker/patch_spiderfoot.py docker/install_spiderfoot.sh /tmp/sf-install/
+COPY docker/spiderfoot-requirements.txt docker/patch_spiderfoot.py docker/accounts_tune.py docker/wmn-priority.json docker/install_spiderfoot.sh /tmp/sf-install/
 RUN if [ "$INSTALL_SPIDERFOOT" = "1" ]; then \
       apt-get update \
       && apt-get install -y --no-install-recommends \

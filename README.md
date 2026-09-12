@@ -92,19 +92,28 @@ export SPIDERFOOT_URL=http://spiderfoot-runner:10000
 docker compose --profile runner up --build
 ```
 
-The runner image reuses `docker/install_spiderfoot.sh` + `docker/patch_spiderfoot.py` (Account Finder / WhatsMyName `wmn-data.json`, breach/dark-web modules removed). `GET /health` → `{ok:true, spiderfoot:true}`. Sync scans may take 2–5 minutes on Starter; Desk waits with a generous HTTP timeout. If the wall clock fires first, the runner aborts the scan and returns any ACCOUNT/SOCIAL events already stored in the temp SQLite DB (`status: timeout` with findings) instead of an empty timeout. **Deep / full-module scans are a future optional** (v1 stays on the social/account allowlist).
+The runner image reuses `docker/install_spiderfoot.sh` + `docker/patch_spiderfoot.py` (Account Finder / WhatsMyName `wmn-data.json`, breach/dark-web modules removed). `GET /health` → `{ok:true, spiderfoot:true}`.
+
+**Why username scans used to return 0 profiles:** SpiderFoot v4 `sfp_accounts` runs a *distrust sweep* (`checkSites(random_garbage_user)`) against the entire WhatsMyName list (~715 sites) on first use, and the runner used a fresh temp `HOME` so that cache never survived. With `_fetchtimeout=5` the cold sweep alone routinely exceeds 180–300s on Starter — the real username check never starts, and salvage only sees the seed `USERNAME` event. The image now (1) skips that sweep by default (`SPIDERFOOT_SKIP_DISTRUST=1`; WMN `e_code` / `e_string` already reject sites that match a random user), (2) caps Account Finder to a high-signal subset (`SPIDERFOOT_ACCOUNTS_MAX_SITES=120`, Sherlock/Maigret overlap first), (3) bundles `wmn-data.json` at image build plus a committed `docker/wmn-priority.json` fallback, and (4) keeps `SPIDERFOOT_CACHE` outside the per-scan temp DB dir (pre-baked `sfaccounts_state_v2=None`). A handle like `stpayne55` should yield concrete ACCOUNT/SOCIAL URLs within ~90–120s most of the time (or partials on timeout). Set `SPIDERFOOT_SKIP_DISTRUST=0` and `SPIDERFOOT_ACCOUNTS_MAX_SITES=0` to restore upstream’s full sweep + list.
+
+If the wall clock still fires, the runner aborts the scan and returns any ACCOUNT/SOCIAL events already stored in the temp SQLite DB (`status: timeout` with findings) instead of an empty timeout. **Deep / full-module scans are a future optional** (v1 stays on the social/account allowlist).
 
 | Env | Default | Meaning |
 | --- | --- | --- |
 | `SPIDERFOOT_URL` | unset | Runner base URL (`http://spiderfoot-runner:10000` or `host:port`). Set this to enable remote mode |
 | `SPIDERFOOT_RUNNER_TOKEN` | unset | Shared bearer secret (required with URL) |
 | `SPIDERFOOT_ENABLED` | off (missing = off) | Local in-process `sf.py` only. Not required when URL+token are set |
-| `SPIDERFOOT_TIMEOUT` | `75` local / `180` on Render web | Wall clock sent to the runner / local CLI. 120–180s on Starter is enough for partial ACCOUNT/SOCIAL hits; the runner salvages SQLite events on timeout |
+| `SPIDERFOOT_TIMEOUT` | `75` local / `120` on Render web | Wall clock sent to the runner / local CLI. 90–120s is enough once distrust is skipped and sites are capped; the runner still salvages SQLite events on timeout |
 | `SPIDERFOOT_MODULES` | `sfp_accounts,sfp_gravatar,sfp_social,sfp_github` | Comma-separated override. Default is the fast Starter set |
 | `SPIDERFOOT_USECASE` | unset | Local CLI only: `passive` / `footprint` |
 | `SPIDERFOOT_HOME` | `/opt/spiderfoot` | Local checkout for non-Docker / in-process fallback |
 | `SPIDERFOOT_PYTHON` | `$SPIDERFOOT_HOME/.venv/bin/python` | Interpreter that has SF deps |
 | `SPIDERFOOT_MAX_THREADS` | `8` on the runner / `2` local | `sf.py -max-threads`; Starter can run 8; keep 2 on a small local host |
+| `SPIDERFOOT_SKIP_DISTRUST` | `1` (runner) | Skip Account Finder’s 715-site `checkSites(randuser)` sweep. Set `0` to restore it |
+| `SPIDERFOOT_ACCOUNTS_MAX_SITES` | `120` (runner) | Cap WhatsMyName sites (priority first). `0` = full list |
+| `SPIDERFOOT_ACCOUNTS_NSFW` | off | Include WMN `xx NSFW xx` category when set |
+| `SPIDERFOOT_CACHE` | `$SPIDERFOOT_HOME/cache` | Persistent SF cache (WMN list + distrust state). Not the per-scan SQLite dir |
+| `SPIDERFOOT_WMN_JSON` | `$SPIDERFOOT_HOME/data/wmn-data.json` | Bundled WhatsMyName JSON so scans do not fetch GitHub raw |
 
 The Desk image can still bundle SF (`docker build --build-arg INSTALL_SPIDERFOOT=0 .` skips it). Local (no Docker): clone OSS v4.0, create a venv, `pip install -r docker/spiderfoot-requirements.txt`, run `python3 docker/patch_spiderfoot.py /path/to/spiderfoot`, then set `SPIDERFOOT_HOME` and `SPIDERFOOT_ENABLED=1`.
 
@@ -122,7 +131,7 @@ A single small instance cannot run Holehe, Socialscan, Sherlock, Maigret, and Sp
 | `MAIGRET_MAX_CONNECTIONS` | `10` | Concurrent Maigret HTTP connections |
 | `SPIDERFOOT_URL` | unset | Enables remote runner (with token). Leave unset on free-only deploys |
 | `SPIDERFOOT_ENABLED` | off | Local in-process CLI only; not needed when URL is set |
-| `SPIDERFOOT_TIMEOUT` | `75` / `180` on Render | SF wall clock (120–180s recommended on Starter; partials are returned) |
+| `SPIDERFOOT_TIMEOUT` | `75` / `120` on Render | SF wall clock (90–120s on Starter after skip+cap; partials are returned) |
 | `SPIDERFOOT_MAX_THREADS` | `8` on the runner | `sf.py -max-threads`; override if the Starter box is tight |
 | `SHERLOCK_FULL` | unset | Sherlock stays on the high-signal subset unless you set `1` |
 
