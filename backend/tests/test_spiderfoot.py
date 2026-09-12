@@ -423,7 +423,7 @@ def test_remote_run_uses_httpx(monkeypatch):
     async def handler(url, json, headers, kwargs):
         seen["url"] = url
         seen["json"] = json
-        seen["headers"] = headers
+        seen["headers"] = headers or kwargs.get("headers")
         return Resp()
 
     monkeypatch.setattr(
