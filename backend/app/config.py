@@ -16,6 +16,18 @@ SHERLOCK_TIMEOUT = float(os.getenv("SHERLOCK_TIMEOUT", "90"))
 SOCIALSCAN_TIMEOUT = float(os.getenv("SOCIALSCAN_TIMEOUT", "40"))
 HARVESTER_TIMEOUT = float(os.getenv("HARVESTER_TIMEOUT", "45"))
 PHONE_TIMEOUT = float(os.getenv("PHONE_TIMEOUT", "30"))
+# SpiderFoot OSS is slow; keep a hard wall clock so one scan cannot stall Render.
+SPIDERFOOT_TIMEOUT = float(os.getenv("SPIDERFOOT_TIMEOUT", "120"))
+SPIDERFOOT_ENABLED = os.getenv("SPIDERFOOT_ENABLED", "1").strip().lower() not in {
+    "0",
+    "false",
+    "no",
+    "off",
+}
+SPIDERFOOT_HOME = os.getenv("SPIDERFOOT_HOME", "/opt/spiderfoot").strip() or "/opt/spiderfoot"
+SPIDERFOOT_USECASE = os.getenv("SPIDERFOOT_USECASE", "").strip().lower()
+SPIDERFOOT_MODULES = os.getenv("SPIDERFOOT_MODULES", "").strip()
+SPIDERFOOT_MAX_THREADS = int(os.getenv("SPIDERFOOT_MAX_THREADS", "3"))
 
 # Sherlock checks 400+ sites by default; the dashboard uses a high-signal
 # subset unless SHERLOCK_FULL=1.

@@ -1,3 +1,5 @@
+# Single service. SpiderFoot OSS is bundled in the image and called via CLI;
+# there is no SpiderFoot sidecar (Render still deploys one web process).
 services:
   osint-desk:
     build: .
@@ -14,4 +16,10 @@ services:
       SHERLOCK_NSFW: ${SHERLOCK_NSFW:-}
       HOLEHE_TIMEOUT: ${HOLEHE_TIMEOUT:-75}
       SHERLOCK_TIMEOUT: ${SHERLOCK_TIMEOUT:-90}
+      # SpiderFoot OSS is invoked in-process via CLI (no HX, no sidecar).
+      SPIDERFOOT_ENABLED: ${SPIDERFOOT_ENABLED:-1}
+      SPIDERFOOT_TIMEOUT: ${SPIDERFOOT_TIMEOUT:-120}
+      SPIDERFOOT_USECASE: ${SPIDERFOOT_USECASE:-}
+      SPIDERFOOT_MODULES: ${SPIDERFOOT_MODULES:-}
+      SPIDERFOOT_HOME: ${SPIDERFOOT_HOME:-/opt/spiderfoot}
     restart: unless-stopped

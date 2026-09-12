@@ -1,0 +1,183 @@
+import asyncio
+import subprocess
+from pathlib import Path
+
+from app.detect import build_query
+from app.scanners import all_scanners
+from app.scanners.spiderfoot_scan import (
+    SpiderFootScanner,
+    derive_target,
+    events_to_findings,
+    parse_spiderfoot_stdout,
+    sf_script_path,
+)
+
+SAMPLE_JSON = """[
+{"type": "Account on External Site", "data": "GitHub (Category: coding)\\n<SFURL>https://github.com/torvalds</SFURL>", "module": "sfp_accounts", "source": "torvalds"},
+{"type": "SOCIAL_MEDIA", "data": "Twitter: https://twitter.com/torvalds ", "module": "sfp_social", "source": "https://twitter.com/torvalds"},
+{"type": "USERNAME", "data": "torvalds", "module": "sfp_accounts", "source": "torvalds"},
+{"type": "Email Address", "data": "linus@example.com", "module": "sfp_gravatar", "source": "torvalds"},
+{"type": "Account on External Site", "data": "Instagram (Category: social)\\n<SFURL>https://instagram.com/</SFURL>", "module": "sfp_accounts", "source": "torvalds"},
+{"type": "Hacked Email Address", "data": "linus@example.com", "module": "sfp_haveibeenpwned", "source": "linus@example.com"},
+{"type": "EMAILADDR_COMPROMISED", "data": "pwned@example.com", "module": "sfp_haveibeenpwned", "source": "pwned@example.com"}
+]"""
+
+
+def test_spiderfoot_registered_and_abstract_phone_is_not():
+    ids = [s.id for s in all_scanners()]
+    assert "spiderfoot" in ids
+    assert "abstract_phone" not in ids
+
+
+def test_unavailable_when_binary_missing(monkeypatch, tmp_path):
+    monkeypatch.setenv("SPIDERFOOT_HOME", str(tmp_path / "missing"))
+    monkeypatch.setenv("SPIDERFOOT_ENABLED", "1")
+    scanner = SpiderFootScanner()
+    assert sf_script_path() is None
+    assert scanner.available() is False
+    result = asyncio.run(scanner.run(build_query("torvalds")))
+    assert result.status.status == "unavailable"
+    assert result.findings == []
+
+
+def test_disabled_even_if_binary_present(monkeypatch, tmp_path):
+    home = tmp_path / "sf"
+    home.mkdir()
+    (home / "sf.py").write_text("# fake\n", encoding="utf-8")
+    monkeypatch.setenv("SPIDERFOOT_HOME", str(home))
+    monkeypatch.setenv("SPIDERFOOT_ENABLED", "0")
+    scanner = SpiderFootScanner()
+    assert scanner.available() is False
+    result = asyncio.run(scanner.run(build_query("torvalds")))
+    assert result.status.status == "unavailable"
+    assert "disabled" in (result.status.error or "")
+
+
+def test_available_when_sf_py_present(monkeypatch, tmp_path):
+    home = tmp_path / "sf"
+    home.mkdir()
+    (home / "sf.py").write_text("# fake\n", encoding="utf-8")
+    monkeypatch.setenv("SPIDERFOOT_HOME", str(home))
+    monkeypatch.setenv("SPIDERFOOT_ENABLED", "1")
+    assert SpiderFootScanner().available() is True
+
+
+def test_parse_sample_json_yields_concrete_profiles_only():
+    events = parse_spiderfoot_stdout(SAMPLE_JSON)
+    assert len(events) == 7
+    findings = events_to_findings(events)
+    profiles = [f for f in findings if f.kind == "profile"]
+    urls = {f.url for f in profiles}
+    assert "https://github.com/torvalds" in urls
+    assert "https://twitter.com/torvalds" in urls
+    assert "https://instagram.com/" not in urls
+    assert all(f.title for f in profiles)
+    assert any(f.kind == "username" and f.value == "torvalds" for f in findings)
+    assert any(f.kind == "email" and f.value == "linus@example.com" for f in findings)
+    assert not any(f.kind == "breach" for f in findings)
+    assert not any("pwned" in f.value for f in findings)
+
+
+def test_truncated_json_still_parses():
+    truncated = SAMPLE_JSON.rsplit("},", 1)[0] + "}"
+    events = parse_spiderfoot_stdout(truncated)
+    assert events
+    assert any("github.com/torvalds" in str(e.get("data")) for e in events)
+
+
+def test_derive_target_username_email_name_phone():
+    assert derive_target(build_query("torvalds")) == "torvalds"
+    email = build_query("ada@example.com")
+    assert derive_target(email) == "ada@example.com"
+    name = build_query("Ada Lovelace")
+    assert derive_target(name) == "Ada Lovelace"
+    phone = build_query("+1 415 555 2671")
+    assert derive_target(phone) == "+14155552671"
+
+
+def test_run_parses_cli_stdout(monkeypatch, tmp_path):
+    home = tmp_path / "sf"
+    home.mkdir()
+    (home / "sf.py").write_text("# fake\n", encoding="utf-8")
+    monkeypatch.setenv("SPIDERFOOT_HOME", str(home))
+    monkeypatch.setenv("SPIDERFOOT_ENABLED", "1")
+    scanner = SpiderFootScanner()
+
+    def fake_cli(target: str, script: Path):
+        assert target == "torvalds"
+        assert script == home / "sf.py"
+        return SAMPLE_JSON, "ok", None
+
+    monkeypatch.setattr(scanner, "_run_cli", fake_cli)
+    result = asyncio.run(scanner.run(build_query("torvalds")))
+    assert result.status.status == "success"
+    profiles = [f for f in result.findings if f.kind == "profile"]
+    assert {f.url for f in profiles} == {
+        "https://github.com/torvalds",
+        "https://twitter.com/torvalds",
+    }
+
+
+def test_timeout_returns_timeout_status(monkeypatch, tmp_path):
+    home = tmp_path / "sf"
+    home.mkdir()
+    (home / "sf.py").write_text("# fake\n", encoding="utf-8")
+    monkeypatch.setenv("SPIDERFOOT_HOME", str(home))
+    monkeypatch.setenv("SPIDERFOOT_TIMEOUT", "12")
+    scanner = SpiderFootScanner()
+
+    def fake_popen(*_a, **_k):
+        class Proc:
+            pid = 4242
+            returncode = None
+            calls = 0
+
+            def communicate(self, timeout=None):
+                self.calls += 1
+                if self.calls == 1:
+                    raise subprocess.TimeoutExpired(cmd="sf.py", timeout=timeout)
+                return "", ""
+
+            def poll(self):
+                return None
+
+            def kill(self):
+                return None
+
+        return Proc()
+
+    monkeypatch.setattr("app.scanners.spiderfoot_scan.subprocess.Popen", fake_popen)
+    monkeypatch.setattr("app.scanners.spiderfoot_scan._kill_group", lambda proc: None)
+    result = asyncio.run(scanner.run(build_query("torvalds")))
+    assert result.status.status == "timeout"
+    assert result.status.error
+    assert "Timed out" in result.status.summary
+
+
+def test_timeout_keeps_partial_profiles(monkeypatch, tmp_path):
+    home = tmp_path / "sf"
+    home.mkdir()
+    (home / "sf.py").write_text("# fake\n", encoding="utf-8")
+    monkeypatch.setenv("SPIDERFOOT_HOME", str(home))
+    scanner = SpiderFootScanner()
+
+    def fake_cli(target: str, script: Path):
+        return SAMPLE_JSON, "timeout", "timeout after 10s"
+
+    monkeypatch.setattr(scanner, "_run_cli", fake_cli)
+    result = asyncio.run(scanner.run(build_query("torvalds")))
+    assert result.status.status == "timeout"
+    assert any(f.kind == "profile" for f in result.findings)
+
+
+def test_username_and_email_jobs_plan_spiderfoot():
+    for raw, expected in (
+        ("torvalds", True),
+        ("ada@example.com", True),
+        ("Ada Lovelace", True),
+        ("+1 415 555 2671", True),
+    ):
+        query = build_query(raw)
+        planned = [s.id for s in all_scanners() if s.applicable(query) or s.optional_key]
+        assert "spiderfoot" in planned, raw
+        assert expected
