@@ -4,6 +4,7 @@ services:
     ports:
       - "43145:8742"
     environment:
+      PORT: ${PORT:-8742}
       HIBP_API_KEY: ${HIBP_API_KEY:-}
       NUMVERIFY_API_KEY: ${NUMVERIFY_API_KEY:-}
       SHERLOCK_FULL: ${SHERLOCK_FULL:-}
