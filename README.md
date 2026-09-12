@@ -59,7 +59,7 @@ cd ../spiderfoot-runner && PYTHONPATH=. pytest
 | Socialscan | `socialscan` | email, username | Taken vs available on a small platform set | Few sites; no profile URLs |
 | Sherlock | `sherlock-project` | username (or derived) | Profile URLs on a high-signal site subset. Tries 2–3 username candidates (undotted email locals first) | Soft-404 false positives possible. `SHERLOCK_FULL=1` for the complete list |
 | Maigret | `maigret` (PyPI) | username (or derived) | Broader username dossier: profile URLs, tags, public display names / photos when parsing is on. Same multi-handle order as Sherlock | Default top-50 ranked sites, no Tor/.onion, disabled+NSFW sites skipped. `MAIGRET_FULL=1` for the complete enabled list. Soft-404s possible. Missing package → unavailable |
-| SpiderFoot | SpiderFoot OSS CLI (not HX) | username, email, name, phone | Account/social profile URLs from a limited module set (Account Finder, GitHub, Twitter, …) | **Off in the free web process.** Set `SPIDERFOOT_URL` + `SPIDERFOOT_RUNNER_TOKEN` to call the Starter runner, or `SPIDERFOOT_ENABLED=1` for a local `sf.py` fallback. Breach/dark-web modules are not enabled. Missing runner/binary → unavailable |
+| SpiderFoot | SpiderFoot OSS CLI (not HX) | username, email, name, phone | Account/social profile URLs from a high-signal module set (Account Finder, Gravatar, Social, GitHub). Email queries seed the local-part handle (same order as Sherlock/Maigret — not digit-stripped) | **Off in the free web process.** Set `SPIDERFOOT_URL` + `SPIDERFOOT_RUNNER_TOKEN` to call the Starter runner, or `SPIDERFOOT_ENABLED=1` for a local `sf.py` fallback. Breach/dark-web modules are not enabled. Missing runner/binary → unavailable |
 | Phone metadata | `phonenumbers` + `ignorant` | phone | E.164, country, carrier dataset, line type, site *registration* notes | Not CNAM / not an address. Ignorant hits are not profile URLs. PhoneInfoga binary is not bundled |
 | theHarvester / CT | crt.sh + HackerTarget (+ CLI if present) | company email domain | Public hostnames / emails for that domain | Consumer mailboxes (Gmail, Yahoo, Outlook, …) are skipped — crt.sh noise is not people. Harvested addresses are filtered to the query / same local-part / company domain and capped |
 | Search links / dorks | built-in | all | Google, DuckDuckGo, Bing, LinkedIn, plus labeled reverse-lookup links for phones | Links only; no scraping |
@@ -100,7 +100,7 @@ The runner image reuses `docker/install_spiderfoot.sh` + `docker/patch_spiderfoo
 | `SPIDERFOOT_RUNNER_TOKEN` | unset | Shared bearer secret (required with URL) |
 | `SPIDERFOOT_ENABLED` | off (missing = off) | Local in-process `sf.py` only. Not required when URL+token are set |
 | `SPIDERFOOT_TIMEOUT` | `75` local / `180` on Render web | Wall clock sent to the runner / local CLI. 120–180s on Starter is enough for partial ACCOUNT/SOCIAL hits; the runner salvages SQLite events on timeout |
-| `SPIDERFOOT_MODULES` | social/account allowlist | Comma-separated override |
+| `SPIDERFOOT_MODULES` | `sfp_accounts,sfp_gravatar,sfp_social,sfp_github` | Comma-separated override. Default is the fast Starter set |
 | `SPIDERFOOT_USECASE` | unset | Local CLI only: `passive` / `footprint` |
 | `SPIDERFOOT_HOME` | `/opt/spiderfoot` | Local checkout for non-Docker / in-process fallback |
 | `SPIDERFOOT_PYTHON` | `$SPIDERFOOT_HOME/.venv/bin/python` | Interpreter that has SF deps |
@@ -137,7 +137,7 @@ Lightweight modules (username candidates, MX, Gravatar, dorks, Twilio, HIBP, …
 
 ## Smoke path
 
-`example@example.com` should return structured sections without crashing: MX for `example.com`, a Gravatar hash (usually no avatar), Holehe site checks, generated username `example`, and a pack of dork links. A dotted Gmail local-part such as `Lisa.m.fraleigh@gmail.com` should list `lisamfraleigh` ahead of `lisa.m.fraleigh`, and Sherlock/Maigret should try the undotted handle first. `torvalds` should return Sherlock and Maigret profile URLs when the network allows. SpiderFoot stays `unavailable` unless the runner URL+token are set (or `SPIDERFOOT_ENABLED=1` with a local `sf.py`). Missing `maigret` is the same: that module is `unavailable`, not a crash.
+`example@example.com` should return structured sections without crashing: MX for `example.com`, a Gravatar hash (usually no avatar), Holehe site checks, generated username `example`, and a pack of dork links. A dotted Gmail local-part such as `Lisa.m.fraleigh@gmail.com` should list `lisamfraleigh` ahead of `lisa.m.fraleigh`, and Sherlock/Maigret/SpiderFoot should try the undotted handle first. An address like `stpayne55@gmail.com` must **not** invent `stpayne`. `torvalds` should return Sherlock and Maigret profile URLs when the network allows. SpiderFoot stays `unavailable` unless the runner URL+token are set (or `SPIDERFOOT_ENABLED=1` with a local `sf.py`). Missing `maigret` is the same: that module is `unavailable`, not a crash.
 
 ## UI
 

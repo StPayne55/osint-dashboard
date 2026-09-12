@@ -17,18 +17,13 @@ from salvage import merge_events, salvage_scan_events
 log = logging.getLogger("spiderfoot-runner")
 
 # Keep in sync with backend/app/scanners/spiderfoot_scan.py
+# High-signal set for Starter (~180–240s). Override via request modules /
+# Desk SPIDERFOOT_MODULES. Breach/dark-web names are still blocked below.
 DEFAULT_MODULES = (
     "sfp_accounts",
+    "sfp_gravatar",
     "sfp_social",
     "sfp_github",
-    "sfp_twitter",
-    "sfp_instagram",
-    "sfp_gravatar",
-    "sfp_keybase",
-    "sfp_myspace",
-    "sfp_slideshare",
-    "sfp_flickr",
-    "sfp_venmo",
 )
 
 OUTPUT_TYPE_CODES = (
@@ -240,6 +235,12 @@ def run_spiderfoot(target: str, modules: list[str] | None = None, timeout: int =
             error = ((stderr or "").strip() or f"exit {proc.returncode}")[:500]
             salvaged, scan_id = salvage_scan_events(data_dir, tmp, target=target)
         events = merge_events(parse_spiderfoot_stdout(stdout or ""), salvaged)
+        if salvaged:
+            log.info(
+                "salvaged event types for %s: %s",
+                target,
+                format_event_type_counts(event_type_counts(salvaged)),
+            )
         if status in {"timeout", "error"}:
             _log_failure(status, target, stderr, events)
         return _payload(
@@ -277,13 +278,28 @@ def _payload(
     }
 
 
+def event_type_counts(events: list[dict[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for event in events:
+        key = str(event.get("type") or event.get("eventType") or "?") or "?"
+        counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
+def format_event_type_counts(counts: dict[str, int]) -> str:
+    if not counts:
+        return "none"
+    return ", ".join(f"{name}={n}" for name, n in sorted(counts.items()))
+
+
 def _log_failure(status: str, target: str, stderr: str, events: list[dict[str, Any]]) -> None:
     excerpt = stderr_excerpt(stderr or "")
     log.warning(
-        "sf.py %s for %s (%s event(s)) stderr: %s",
+        "sf.py %s for %s (%s event(s); %s) stderr: %s",
         status,
         target,
         len(events),
+        format_event_type_counts(event_type_counts(events)),
         excerpt or "(empty)",
     )
 

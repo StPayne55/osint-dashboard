@@ -112,9 +112,8 @@ def username_candidates(query: Query) -> list[str]:
         else:
             add(local)
         add(local.replace("_", ""))
-        add(re.sub(r"\d+$", "", plus_base))
-        if compact != local:
-            add(re.sub(r"\d+$", "", compact))
+        # Do not strip trailing digits (stpayne55 → stpayne). Those guesses
+        # hit unrelated social accounts. Undotted / plus-stripped locals stay.
     if query.username:
         handle = query.username.lstrip("@")
         add(handle)

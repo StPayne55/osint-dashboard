@@ -128,9 +128,12 @@ def test_find_scan_db_under_home_and_data_dir(tmp_path):
     assert find_scan_db(tmp_path / "missing") is None
 
 
-def test_salvage_returns_account_social_and_aborts(tmp_path):
+def test_salvage_returns_account_social_and_aborts(tmp_path, caplog):
+    import logging
+
     db = write_fake_db(tmp_path / "spiderfoot.db")
-    events, scan_id = salvage_scan_events(tmp_path, target="torvalds")
+    with caplog.at_level(logging.INFO, logger="spiderfoot-runner"):
+        events, scan_id = salvage_scan_events(tmp_path, target="torvalds")
     assert scan_id == "SCAN1"
     types = {e["type"] for e in events}
     assert types == {"ACCOUNT_EXTERNAL_OWNED", "SOCIAL_MEDIA"}
@@ -141,6 +144,8 @@ def test_salvage_returns_account_social_and_aborts(tmp_path):
     status = conn.execute("SELECT status FROM tbl_scan_instance").fetchone()[0]
     conn.close()
     assert status == "ABORTED"
+    assert "ACCOUNT_EXTERNAL_OWNED=1" in caplog.text
+    assert "SOCIAL_MEDIA=1" in caplog.text
 
 
 def test_abort_scan_and_latest_scan_fallback(tmp_path):
@@ -212,3 +217,22 @@ def test_timeout_salvages_partial_events_from_sqlite(monkeypatch, tmp_path):
     assert any(e["type"] == "SOCIAL_MEDIA" for e in result["events"])
     assert "wall clock" in result["stderr_excerpt"]
     assert result["stdout_excerpt"] == "["
+
+
+def test_event_type_counts_format_salvaged_types():
+    events = [
+        {"type": "ACCOUNT_EXTERNAL_OWNED", "data": ACCOUNT_DATA, "module": "sfp_accounts"},
+        {"type": "SOCIAL_MEDIA", "data": SOCIAL_DATA, "module": "sfp_social"},
+        {"type": "USERNAME", "data": "torvalds", "module": "sfp_accounts"},
+        {"type": "USERNAME", "data": "other", "module": "sfp_accounts"},
+    ]
+    counts = cli.event_type_counts(events)
+    assert counts == {
+        "ACCOUNT_EXTERNAL_OWNED": 1,
+        "SOCIAL_MEDIA": 1,
+        "USERNAME": 2,
+    }
+    assert cli.format_event_type_counts(counts) == (
+        "ACCOUNT_EXTERNAL_OWNED=1, SOCIAL_MEDIA=1, USERNAME=2"
+    )
+    assert cli.format_event_type_counts({}) == "none"

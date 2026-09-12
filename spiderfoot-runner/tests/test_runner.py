@@ -98,6 +98,13 @@ def test_sanitize_modules_drops_breach_and_unknown():
     assert cleaned == ["sfp_accounts"]
     assert sanitize_modules(None) == list(DEFAULT_MODULES)
     assert sanitize_modules([]) == list(DEFAULT_MODULES)
+    assert list(DEFAULT_MODULES) == [
+        "sfp_accounts",
+        "sfp_gravatar",
+        "sfp_social",
+        "sfp_github",
+    ]
+    assert "sfp_haveibeenpwned" not in DEFAULT_MODULES
 
 
 def test_parse_spiderfoot_stdout_and_excerpt():

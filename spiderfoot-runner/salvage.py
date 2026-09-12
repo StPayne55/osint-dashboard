@@ -195,11 +195,17 @@ def salvage_scan_events(
     if abort:
         abort_scan(db_path, resolved_id)
     events = query_scan_events(db_path, resolved_id, type_codes=type_codes)
+    type_counts: dict[str, int] = {}
+    for event in events:
+        key = str(event.get("type") or "?") or "?"
+        type_counts[key] = type_counts.get(key, 0) + 1
+    type_text = ", ".join(f"{k}={v}" for k, v in sorted(type_counts.items())) or "none"
     log.info(
-        "Salvaged %s event(s) from %s scan %s",
+        "Salvaged %s event(s) from %s scan %s types: %s",
         len(events),
         db_path,
         resolved_id,
+        type_text,
     )
     return events, resolved_id
 
