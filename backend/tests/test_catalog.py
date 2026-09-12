@@ -13,7 +13,8 @@ def test_health():
     assert r.json()["ok"] is True
 
 
-def test_catalog_lists_core_scanners():
+def test_catalog_lists_core_scanners(monkeypatch):
+    monkeypatch.delenv("SPIDERFOOT_ENABLED", raising=False)
     r = client.get("/api/catalog")
     assert r.status_code == 200
     ids = {s["id"] for s in r.json()["scanners"]}
@@ -34,6 +35,8 @@ def test_catalog_lists_core_scanners():
     }:
         assert required in ids
     assert "abstract_phone" not in ids
+    spider = next(s for s in r.json()["scanners"] if s["id"] == "spiderfoot")
+    assert spider["available"] is False
 
 
 def test_phone_jobs_do_not_plan_abstract_phone():

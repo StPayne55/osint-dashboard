@@ -44,6 +44,34 @@ def test_unavailable_when_binary_missing(monkeypatch, tmp_path):
     assert result.findings == []
 
 
+def test_disabled_by_default_even_if_binary_present(monkeypatch, tmp_path):
+    home = tmp_path / "sf"
+    home.mkdir()
+    (home / "sf.py").write_text("# fake\n", encoding="utf-8")
+    monkeypatch.setenv("SPIDERFOOT_HOME", str(home))
+    monkeypatch.delenv("SPIDERFOOT_ENABLED", raising=False)
+    from app.scanners.spiderfoot_scan import spiderfoot_enabled
+
+    assert spiderfoot_enabled() is False
+    scanner = SpiderFootScanner()
+    assert scanner.available() is False
+    result = asyncio.run(scanner.run(build_query("torvalds")))
+    assert result.status.status == "unavailable"
+    assert "disabled" in (result.status.error or result.status.summary).lower()
+
+
+def test_blank_env_is_disabled(monkeypatch, tmp_path):
+    home = tmp_path / "sf"
+    home.mkdir()
+    (home / "sf.py").write_text("# fake\n", encoding="utf-8")
+    monkeypatch.setenv("SPIDERFOOT_HOME", str(home))
+    monkeypatch.setenv("SPIDERFOOT_ENABLED", "")
+    from app.scanners.spiderfoot_scan import spiderfoot_enabled
+
+    assert spiderfoot_enabled() is False
+    assert SpiderFootScanner().available() is False
+
+
 def test_disabled_even_if_binary_present(monkeypatch, tmp_path):
     home = tmp_path / "sf"
     home.mkdir()
@@ -127,6 +155,7 @@ def test_timeout_returns_timeout_status(monkeypatch, tmp_path):
     home.mkdir()
     (home / "sf.py").write_text("# fake\n", encoding="utf-8")
     monkeypatch.setenv("SPIDERFOOT_HOME", str(home))
+    monkeypatch.setenv("SPIDERFOOT_ENABLED", "1")
     monkeypatch.setenv("SPIDERFOOT_TIMEOUT", "12")
     scanner = SpiderFootScanner()
 
@@ -163,6 +192,7 @@ def test_timeout_keeps_partial_profiles(monkeypatch, tmp_path):
     home.mkdir()
     (home / "sf.py").write_text("# fake\n", encoding="utf-8")
     monkeypatch.setenv("SPIDERFOOT_HOME", str(home))
+    monkeypatch.setenv("SPIDERFOOT_ENABLED", "1")
     scanner = SpiderFootScanner()
 
     def fake_cli(target: str, script: Path):

@@ -1,9 +1,20 @@
 from __future__ import annotations
 
 from app.config import SOCIALSCAN_TIMEOUT
+from app.detect import format_tried_handles, merge_findings_by_url, social_username_candidates
 from app.models import Finding, Query, QueryType, ScannerResult
 from app.profile_urls import is_concrete_profile_url
 from app.scanners.base import Scanner
+
+
+def social_queries(query: Query) -> list[str]:
+    queries: list[str] = []
+    if query.email:
+        queries.append(query.email)
+    for handle in social_username_candidates(query):
+        if handle and handle not in queries:
+            queries.append(handle)
+    return queries
 
 
 class SocialscanScanner(Scanner):
@@ -47,12 +58,8 @@ class SocialscanScanner(Scanner):
         except Exception:
             from socialscan.platforms import Platforms  # type: ignore
 
-        queries: list[str] = []
-        if query.email:
-            queries.append(query.email)
-        handle = query.username or (query.username_candidates[0] if query.username_candidates else None)
-        if handle and handle not in queries:
-            queries.append(handle)
+        queries = social_queries(query)
+        handles = social_username_candidates(query)
         if not queries:
             return self._result("skipped", "No email or username")
 
@@ -100,9 +107,11 @@ class SocialscanScanner(Scanner):
                     )
                 )
 
+        findings = merge_findings_by_url(findings)
+        tried = format_tried_handles(handles) if handles else (query.email or "")
         summary = (
-            f"{len(findings)} taken identifier(s)"
+            f"{len(findings)} taken identifier(s) · tried {tried}"
             if findings
-            else "No platform reported the identifier as taken"
+            else f"No platform reported the identifier as taken · tried {tried}"
         )
         return self._result("success", summary, findings=findings, raw=raw_rows)
