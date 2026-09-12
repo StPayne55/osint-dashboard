@@ -1,5 +1,6 @@
-# Single service. SpiderFoot OSS is bundled in the image and called via CLI;
-# there is no SpiderFoot sidecar (Render still deploys one web process).
+# Desk is the default service. SpiderFoot local CLI stays off unless you set
+# SPIDERFOOT_ENABLED=1. Optional `runner` profile starts the dedicated
+# spiderfoot-runner (same layout as Render Starter pserv).
 services:
   osint-desk:
     build: .
@@ -22,12 +23,27 @@ services:
       MAIGRET_MAX_CONNECTIONS: ${MAIGRET_MAX_CONNECTIONS:-10}
       MAIGRET_FULL: ${MAIGRET_FULL:-}
       SOCIAL_USERNAME_CANDIDATES: ${SOCIAL_USERNAME_CANDIDATES:-2}
-      # SpiderFoot OSS is invoked in-process via CLI (no HX, no sidecar).
-      # Off by default — enable with SPIDERFOOT_ENABLED=1 on a larger host.
+      # Local in-process CLI (off by default). Remote runner wins when URL+token set.
       SPIDERFOOT_ENABLED: ${SPIDERFOOT_ENABLED:-0}
+      SPIDERFOOT_URL: ${SPIDERFOOT_URL:-}
+      SPIDERFOOT_RUNNER_TOKEN: ${SPIDERFOOT_RUNNER_TOKEN:-}
       SPIDERFOOT_TIMEOUT: ${SPIDERFOOT_TIMEOUT:-75}
       SPIDERFOOT_USECASE: ${SPIDERFOOT_USECASE:-}
       SPIDERFOOT_MODULES: ${SPIDERFOOT_MODULES:-}
       SPIDERFOOT_MAX_THREADS: ${SPIDERFOOT_MAX_THREADS:-2}
       SPIDERFOOT_HOME: ${SPIDERFOOT_HOME:-/opt/spiderfoot}
+    restart: unless-stopped
+
+  spiderfoot-runner:
+    profiles: ["runner"]
+    build:
+      context: .
+      dockerfile: spiderfoot-runner/Dockerfile
+    ports:
+      - "10000:10000"
+    environment:
+      PORT: ${SPIDERFOOT_RUNNER_PORT:-10000}
+      SPIDERFOOT_RUNNER_TOKEN: ${SPIDERFOOT_RUNNER_TOKEN:-dev-runner-token}
+      SPIDERFOOT_HOME: /opt/spiderfoot
+      SPIDERFOOT_MAX_THREADS: ${SPIDERFOOT_MAX_THREADS:-2}
     restart: unless-stopped

@@ -15,6 +15,8 @@ def test_health():
 
 def test_catalog_lists_core_scanners(monkeypatch):
     monkeypatch.delenv("SPIDERFOOT_ENABLED", raising=False)
+    monkeypatch.delenv("SPIDERFOOT_URL", raising=False)
+    monkeypatch.delenv("SPIDERFOOT_RUNNER_TOKEN", raising=False)
     r = client.get("/api/catalog")
     assert r.status_code == 200
     ids = {s["id"] for s in r.json()["scanners"]}

@@ -47,14 +47,20 @@ HEAVY_SCANNER_CONCURRENCY = _int_env("HEAVY_SCANNER_CONCURRENCY", 1)
 # Prefer undotted local-parts first when the email contains . or +.
 SOCIAL_USERNAME_CANDIDATES = _int_env("SOCIAL_USERNAME_CANDIDATES", 2, minimum=1, maximum=3)
 # SpiderFoot OSS is slow and regularly hits the wall clock on Render free.
-# Off unless explicitly enabled (SPIDERFOOT_ENABLED=1) on a larger box.
+# Local in-process CLI is off unless SPIDERFOOT_ENABLED=1.
+# Remote runner: SPIDERFOOT_URL + SPIDERFOOT_RUNNER_TOKEN is enough to enable
+# (do not also set SPIDERFOOT_ENABLED on the free web service).
 SPIDERFOOT_TIMEOUT = float(os.getenv("SPIDERFOOT_TIMEOUT", "75"))
 SPIDERFOOT_ENABLED = env_flag("SPIDERFOOT_ENABLED", default=False)
+SPIDERFOOT_URL = os.getenv("SPIDERFOOT_URL", "").strip()
+SPIDERFOOT_RUNNER_TOKEN = os.getenv("SPIDERFOOT_RUNNER_TOKEN", "").strip()
 SPIDERFOOT_HOME = os.getenv("SPIDERFOOT_HOME", "/opt/spiderfoot").strip() or "/opt/spiderfoot"
 SPIDERFOOT_USECASE = os.getenv("SPIDERFOOT_USECASE", "").strip().lower()
 SPIDERFOOT_MODULES = os.getenv("SPIDERFOOT_MODULES", "").strip()
 # Keep this low on small hosts (Render free): SF uses multiprocessing.
 SPIDERFOOT_MAX_THREADS = int(os.getenv("SPIDERFOOT_MAX_THREADS", "2"))
+# HTTP wait when Desk calls the runner. Starter can hold a 2–5 min scan.
+SPIDERFOOT_REMOTE_TIMEOUT = float(os.getenv("SPIDERFOOT_REMOTE_TIMEOUT", "240"))
 
 # Sherlock checks 400+ sites by default; the dashboard uses a high-signal
 # subset unless SHERLOCK_FULL=1.
