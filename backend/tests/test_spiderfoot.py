@@ -10,8 +10,10 @@ from fastapi.testclient import TestClient
 from app.detect import build_query
 from app.scanners import all_scanners
 from app.scanners.spiderfoot_scan import (
+    DEFAULT_MODULES,
     SpiderFootScanner,
     derive_target,
+    event_type_counts,
     events_to_findings,
     parse_spiderfoot_stdout,
     remote_configured,
@@ -125,14 +127,41 @@ def test_truncated_json_still_parses():
     assert any("github.com/torvalds" in str(e.get("data")) for e in events)
 
 
+def test_default_modules_are_high_signal():
+    assert list(DEFAULT_MODULES) == [
+        "sfp_accounts",
+        "sfp_gravatar",
+        "sfp_social",
+        "sfp_github",
+    ]
+    assert "sfp_haveibeenpwned" not in DEFAULT_MODULES
+    assert "sfp_ahmia" not in DEFAULT_MODULES
+
+
 def test_derive_target_username_email_name_phone():
     assert derive_target(build_query("torvalds")) == "torvalds"
     email = build_query("ada@example.com")
-    assert derive_target(email) == "ada@example.com"
+    assert derive_target(email) == "ada"
     name = build_query("Ada Lovelace")
     assert derive_target(name) == "Ada Lovelace"
     phone = build_query("+1 415 555 2671")
     assert derive_target(phone) == "+14155552671"
+
+
+def test_derive_target_email_uses_social_username_not_digit_strip():
+    assert derive_target(build_query("stpayne55@gmail.com")) == "stpayne55"
+    dotted = build_query("Lisa.m.fraleigh@gmail.com")
+    assert derive_target(dotted).lower() == "lisamfraleigh"
+    plus = build_query("Ada.Lovelace+tag@gmail.com")
+    assert derive_target(plus).lower() == "adalovelacetag"
+    assert "stpayne" != derive_target(build_query("stpayne55@gmail.com"))
+
+
+def test_derive_target_gravatar_only_keeps_email(monkeypatch):
+    monkeypatch.setenv("SPIDERFOOT_MODULES", "sfp_gravatar")
+    assert derive_target(build_query("stpayne55@gmail.com")) == "stpayne55@gmail.com"
+    monkeypatch.setenv("SPIDERFOOT_MODULES", "sfp_accounts,sfp_gravatar")
+    assert derive_target(build_query("stpayne55@gmail.com")) == "stpayne55"
 
 
 def test_run_parses_cli_stdout(monkeypatch, tmp_path):
@@ -210,6 +239,27 @@ def test_timeout_keeps_partial_profiles(monkeypatch, tmp_path):
     result = asyncio.run(scanner.run(build_query("torvalds")))
     assert result.status.status == "timeout"
     assert any(f.kind == "profile" for f in result.findings)
+
+
+def test_email_query_seeds_local_cli_with_username(monkeypatch, tmp_path):
+    home = tmp_path / "sf"
+    home.mkdir()
+    (home / "sf.py").write_text("# fake\n", encoding="utf-8")
+    monkeypatch.setenv("SPIDERFOOT_HOME", str(home))
+    monkeypatch.setenv("SPIDERFOOT_ENABLED", "1")
+    scanner = SpiderFootScanner()
+    seen: dict = {}
+
+    def fake_cli(target: str, script: Path):
+        seen["target"] = target
+        return SAMPLE_JSON, "timeout", "timeout after 180s"
+
+    monkeypatch.setattr(scanner, "_run_cli", fake_cli)
+    result = asyncio.run(scanner.run(build_query("stpayne55@gmail.com")))
+    assert seen["target"] == "stpayne55"
+    assert result.status.status == "timeout"
+    assert any(f.kind == "profile" and f.url for f in result.findings)
+    assert "profile(s) so far" in result.status.summary
 
 
 def test_username_and_email_jobs_plan_spiderfoot():
@@ -493,6 +543,81 @@ def test_remote_timeout_and_error(monkeypatch):
     result = asyncio.run(SpiderFootScanner().run(build_query("torvalds")))
     assert result.status.status == "error"
     assert "crashed" in (result.status.error or "")
+
+
+def test_remote_timeout_email_seeds_username_and_keeps_profiles(monkeypatch):
+    monkeypatch.setenv("SPIDERFOOT_URL", "http://sf.internal:10000")
+    monkeypatch.setenv("SPIDERFOOT_RUNNER_TOKEN", "shared-secret")
+    monkeypatch.setenv("SPIDERFOOT_REMOTE_TIMEOUT", "180")
+    seen: dict = {}
+
+    class TimeoutResp:
+        status_code = 200
+
+        def json(self):
+            return {
+                "status": "timeout",
+                "target": "stpayne55",
+                "events": [
+                    {
+                        "type": "ACCOUNT_EXTERNAL_OWNED",
+                        "data": "GitHub (Category: coding)\n<SFURL>https://github.com/stpayne55</SFURL>",
+                        "module": "sfp_accounts",
+                    },
+                    {
+                        "type": "SOCIAL_MEDIA",
+                        "data": "Twitter: https://twitter.com/stpayne55",
+                        "module": "sfp_social",
+                    },
+                    {
+                        "type": "EMAILADDR",
+                        "data": "stpayne55@gmail.com",
+                        "module": "sfp_gravatar",
+                    },
+                    {
+                        "type": "USERNAME",
+                        "data": "stpayne55",
+                        "module": "sfp_accounts",
+                    },
+                ],
+                "stdout_excerpt": "[",
+                "stderr_excerpt": "sf.py timeout for stpayne55 (4 event(s); ACCOUNT_EXTERNAL_OWNED=1, SOCIAL_MEDIA=1, EMAILADDR=1, USERNAME=1)",
+                "error": "timeout after 180s",
+                "salvaged": True,
+                "scan_id": "SCAN-EMAIL",
+            }
+
+    async def handler(url, json, headers, kwargs):
+        seen["json"] = json
+        return TimeoutResp()
+
+    monkeypatch.setattr(
+        "app.scanners.spiderfoot_scan.httpx.AsyncClient",
+        _fake_async_client(handler),
+    )
+    result = asyncio.run(SpiderFootScanner().run(build_query("stpayne55@gmail.com")))
+    assert seen["json"]["target"] == "stpayne55"
+    assert seen["json"]["target"] != "stpayne"
+    assert "sfp_accounts" in seen["json"]["modules"]
+    assert "sfp_haveibeenpwned" not in seen["json"]["modules"]
+    assert result.status.status == "timeout"
+    profiles = [f for f in result.findings if f.kind == "profile"]
+    urls = {f.url for f in profiles}
+    assert "https://github.com/stpayne55" in urls
+    assert "https://twitter.com/stpayne55" in urls
+    assert "profile(s) so far" in result.status.summary
+    assert result.raw["salvaged"] is True
+    assert result.raw["event_types"]["ACCOUNT_EXTERNAL_OWNED"] == 1
+    assert result.raw["event_types"]["SOCIAL_MEDIA"] == 1
+
+
+def test_event_type_counts_and_timeout_findings_from_account_events():
+    events = parse_spiderfoot_stdout(SAMPLE_JSON)
+    counts = event_type_counts(events)
+    assert counts["ACCOUNT_EXTERNAL_OWNED"] == 2
+    assert counts["SOCIAL_MEDIA"] == 1
+    findings = events_to_findings(events)
+    assert any(f.kind == "profile" and f.url == "https://github.com/torvalds" for f in findings)
 
 
 def test_remote_401_and_connect_error(monkeypatch):

@@ -41,6 +41,17 @@ def test_social_and_spiderfoot_config_defaults():
     assert SPIDERFOOT_ENABLED is False
 
 
+def test_email_local_does_not_strip_trailing_digits():
+    q = build_query("stpayne55@gmail.com")
+    lowered = [c.lower() for c in q.username_candidates]
+    assert "stpayne55" in lowered
+    assert "stpayne" not in lowered
+    social = social_username_candidates(q)
+    assert "stpayne55" in [c.lower() for c in social]
+    assert "stpayne" not in [c.lower() for c in social]
+    assert derive_username(q).lower() == "stpayne55"
+
+
 def test_dotted_email_local_includes_nodot_variant_first():
     q = build_query("Lisa.m.fraleigh@gmail.com")
     lowered = [c.lower() for c in q.username_candidates]

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import re
 import signal
@@ -24,24 +25,22 @@ from app.config import (
     USER_AGENT,
     env_flag,
 )
+from app.detect import derive_username
 from app.models import Finding, Query, QueryType, ScannerResult
 from app.profile_urls import is_concrete_profile_url
 from app.scanners.base import Scanner
 
-# Account / social modules that work without paid keys. Breach, dump, and
-# dark-web modules are omitted on purpose (policy + most need API keys).
+log = logging.getLogger("osint.spiderfoot")
+
+# High-signal set that can finish (or produce ACCOUNT/SOCIAL URLs) on a
+# Render Starter box within ~180–240s. Twitter/Instagram/Flickr/etc. ate
+# wall clock for little extra yield. Override with SPIDERFOOT_MODULES.
+# Breach, dump, and dark-web modules stay omitted (policy + API keys).
 DEFAULT_MODULES = (
     "sfp_accounts",
+    "sfp_gravatar",
     "sfp_social",
     "sfp_github",
-    "sfp_twitter",
-    "sfp_instagram",
-    "sfp_gravatar",
-    "sfp_keybase",
-    "sfp_myspace",
-    "sfp_slideshare",
-    "sfp_flickr",
-    "sfp_venmo",
 )
 
 # stdout -F matches SpiderFoot event *codes*, not the human labels.
@@ -132,10 +131,34 @@ def remote_configured() -> bool:
     return bool(spiderfoot_runner_url() and spiderfoot_runner_token())
 
 
-def derive_target(query: Query) -> str | None:
-    """Pick a SpiderFoot target. Prefer a typed identity, then username hints."""
+def _modules_are_email_only(modules: list[str] | None) -> bool:
+    """True when the CLI seed should stay an email (Gravatar-only)."""
+    chosen = [m for m in (modules or []) if m]
+    return bool(chosen) and all(m == "sfp_gravatar" for m in chosen)
+
+
+def derive_target(query: Query, modules: list[str] | None = None) -> str | None:
+    """Pick a SpiderFoot ``-s`` seed.
+
+    ``sfp_accounts`` / WhatsMyName watch USERNAME events. Seeding an email
+    query with the full address makes ROOT=EMAILADDR, so account modules
+    barely fire and timeouts salvage EMAILADDR/USERNAME without profile
+    URLs. Email lookups therefore use the same social-friendly local-part
+    as Sherlock/Maigret (plus-stripped / undotted — never digit-stripped).
+
+    If the caller selected only ``sfp_gravatar``, keep the email address.
+    Desk already has a dedicated Gravatar scanner; the default social set
+    prefers the username so Account Finder can produce profile URLs.
+    """
+    chosen = modules if modules is not None else (selected_modules() or list(DEFAULT_MODULES))
     if query.type == QueryType.email and query.email:
-        return query.email
+        if _modules_are_email_only(chosen):
+            return query.email
+        handle = derive_username(query)
+        if handle:
+            return handle
+        local = query.email.split("@", 1)[0].split("+", 1)[0]
+        return local or query.email
     if query.type == QueryType.phone and (query.phone_e164 or query.raw):
         return query.phone_e164 or query.raw
     if query.type == QueryType.name and query.name:
@@ -143,7 +166,12 @@ def derive_target(query: Query) -> str | None:
     if query.username:
         return query.username.lstrip("@")
     if query.email:
-        return query.email.split("@", 1)[0]
+        if _modules_are_email_only(chosen):
+            return query.email
+        handle = derive_username(query)
+        if handle:
+            return handle
+        return query.email.split("@", 1)[0].split("+", 1)[0]
     if query.username_candidates:
         return query.username_candidates[0]
     if query.name:
@@ -151,6 +179,16 @@ def derive_target(query: Query) -> str | None:
     if query.phone_e164:
         return query.phone_e164
     return None
+
+
+def event_type_counts(events: list[dict[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for event in events:
+        key = _normalize_type(event) or str(event.get("type") or event.get("eventType") or "?")
+        if not key:
+            key = "?"
+        counts[key] = counts.get(key, 0) + 1
+    return counts
 
 
 def parse_spiderfoot_stdout(stdout: str) -> list[dict[str, Any]]:
@@ -368,10 +406,11 @@ class SpiderFootScanner(Scanner):
         return spiderfoot_enabled() and sf_script_path() is not None
 
     def applicable(self, query: Query) -> bool:
-        return bool(derive_target(query))
+        return bool(derive_target(query, selected_modules() or list(DEFAULT_MODULES)))
 
     async def run(self, query: Query) -> ScannerResult:
-        target = derive_target(query)
+        modules = selected_modules() or list(DEFAULT_MODULES)
+        target = derive_target(query, modules)
         if not target:
             return self._result("skipped", "No username, email, name, or phone target")
 
@@ -439,9 +478,22 @@ class SpiderFootScanner(Scanner):
     ) -> ScannerResult:
         findings = events_to_findings(events)
         profiles = sum(1 for f in findings if f.kind == "profile")
+        type_counts = event_type_counts(events)
+        type_text = ", ".join(f"{k}={v}" for k, v in sorted(type_counts.items())) or "none"
+        log.info(
+            "SpiderFoot %s target=%s events=%s types=%s profiles=%s salvaged=%s mode=%s",
+            status,
+            target,
+            len(events),
+            type_text,
+            profiles,
+            salvaged,
+            mode,
+        )
         raw = {
             "target": target,
             "events": len(events),
+            "event_types": type_counts,
             "modules": selected_modules() or list(DEFAULT_MODULES),
             "usecase": selected_usecase(),
             "partial": status == "timeout",
