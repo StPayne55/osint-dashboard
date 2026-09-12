@@ -17,6 +17,7 @@ def test_catalog_lists_core_scanners(monkeypatch):
     monkeypatch.delenv("SPIDERFOOT_ENABLED", raising=False)
     monkeypatch.delenv("SPIDERFOOT_URL", raising=False)
     monkeypatch.delenv("SPIDERFOOT_RUNNER_TOKEN", raising=False)
+    monkeypatch.delenv("PDL_API_KEY", raising=False)
     r = client.get("/api/catalog")
     assert r.status_code == 200
     ids = {s["id"] for s in r.json()["scanners"]}
@@ -30,6 +31,7 @@ def test_catalog_lists_core_scanners(monkeypatch):
         "socialscan",
         "harvester",
         "hibp",
+        "pdl",
         "twilio",
         "numverify",
         "spiderfoot",
@@ -39,6 +41,9 @@ def test_catalog_lists_core_scanners(monkeypatch):
     assert "abstract_phone" not in ids
     spider = next(s for s in r.json()["scanners"] if s["id"] == "spiderfoot")
     assert spider["available"] is False
+    pdl = next(s for s in r.json()["scanners"] if s["id"] == "pdl")
+    assert pdl["optional_key"] == "PDL_API_KEY"
+    assert pdl["available"] is False
 
 
 def test_phone_jobs_do_not_plan_abstract_phone():
@@ -69,4 +74,5 @@ def test_start_scan_and_poll():
     assert "honesty" in body
     assert "spiderfoot" in r.json()["scanners"]
     assert "maigret" in r.json()["scanners"]
+    assert "pdl" in r.json()["scanners"]
     assert "abstract_phone" not in r.json()["scanners"]

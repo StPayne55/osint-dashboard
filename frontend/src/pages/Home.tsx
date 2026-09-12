@@ -143,7 +143,7 @@ export function Home() {
             <li>No current home address, SSN, or government file from a name alone.</li>
             <li>No Spokeo / BeenVerified / Dehashed / credential-dump integrations.</li>
             <li>No login to private accounts. Rate-limits will look like misses.</li>
-            <li>HIBP, Numverify, and Twilio CNAM stay skipped unless you add your own API keys.</li>
+            <li>HIBP, People Data Labs, Numverify, and Twilio CNAM stay skipped unless you add your own API keys.</li>
           </ul>
         </article>
       </div>
