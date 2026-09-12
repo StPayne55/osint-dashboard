@@ -84,7 +84,25 @@ def test_findings_keep_concrete_profiles_only():
     assert github.extra.get("display_name") == "Linus Torvalds"
     photos = [f for f in findings if f.kind == "image"]
     assert photos and photos[0].url.startswith("https://avatars.githubusercontent.com/")
+    assert photos[0].extra.get("source") == "maigret"
     assert not any("not-torvalds" in (f.url or "") for f in findings)
+
+
+def test_findings_accept_nested_and_protocol_relative_photos():
+    results = {
+        "GitHub": _claimed(
+            "https://github.com/ada",
+            ids={"image": {"url": "//avatars.githubusercontent.com/u/99"}},
+        ),
+        "GitLab": _claimed(
+            "https://gitlab.com/ada",
+            ids={"photos": [{"value": "https://cdn.example.com/ada.png"}]},
+        ),
+    }
+    findings = findings_from_results(results, "ada")
+    photo_urls = {f.url for f in findings if f.kind == "image"}
+    assert "https://avatars.githubusercontent.com/u/99" in photo_urls
+    assert "https://cdn.example.com/ada.png" in photo_urls
 
 
 def test_derive_username_matches_sherlock_style():

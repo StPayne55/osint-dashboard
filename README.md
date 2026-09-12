@@ -56,7 +56,7 @@ cd ../spiderfoot-runner && PYTHONPATH=. pytest
 | --- | --- | --- | --- | --- |
 | Username candidates | built-in | name, email, username | `firstlast`, email local-part, etc. | Guesses only |
 | Email MX / disposable | dnspython | email | MX hosts, role/disposable hints | MX ≠ mailbox exists |
-| Gravatar | public API | email | Avatar + published profile/accounts | Only if they opted in |
+| Gravatar | public API | email | Avatar + published profile/accounts, shown in the report Photos / Avatars gallery | Only if they opted in |
 | Holehe | `holehe` | email | Sites that appear to have the email | Rate-limits look like misses |
 | Socialscan | `socialscan` | email, username | Taken vs available on a small platform set | Few sites; no profile URLs |
 | Sherlock | `sherlock-project` | username (or derived) | Profile URLs on a high-signal site subset. Tries 2–3 username candidates (undotted email locals first) | Soft-404 false positives possible. `SHERLOCK_FULL=1` for the complete list |
@@ -64,7 +64,7 @@ cd ../spiderfoot-runner && PYTHONPATH=. pytest
 | SpiderFoot | SpiderFoot OSS CLI (not HX) | username, email, name, phone | Account/social profile URLs from a high-signal module set (Account Finder, Gravatar, Social, GitHub). Email queries seed the local-part handle (same order as Sherlock/Maigret — not digit-stripped) | **Off in the free web process.** Set `SPIDERFOOT_URL` + `SPIDERFOOT_RUNNER_TOKEN` to call the Starter runner, or `SPIDERFOOT_ENABLED=1` for a local `sf.py` fallback. Breach/dark-web modules are not enabled. Missing runner/binary → unavailable |
 | Phone metadata | `phonenumbers` + `ignorant` | phone | E.164, country, carrier dataset, line type, site *registration* notes | Not CNAM / not an address. Ignorant hits are not profile URLs. PhoneInfoga binary is not bundled |
 | theHarvester / CT | crt.sh + HackerTarget (+ CLI if present) | company email domain | Public hostnames / emails for that domain | Consumer mailboxes (Gmail, Yahoo, Outlook, …) are skipped — crt.sh noise is not people. Harvested addresses are filtered to the query / same local-part / company domain and capped |
-| Search links / dorks | built-in | all | Google, DuckDuckGo, Bing, dedicated LinkedIn profile/people-search links (manual; login may be required), plus labeled reverse-lookup links for phones | Links only; no LinkedIn scraping or API |
+| Search links / dorks | built-in | all | Google, DuckDuckGo, Bing, dedicated LinkedIn profile/people-search links (manual; login may be required), a Google Images dork for quoted names/usernames (opens in your browser), plus labeled reverse-lookup links for phones | Links only; no LinkedIn, Google Images, or face-search scraping |
 | HIBP | optional API | email | Breach titles | Skipped without `HIBP_API_KEY` |
 | People Data Labs | optional API (`GET https://api.peopledatalabs.com/v5/person/enrich`) | email | Public-safe name, job title, employer, city/region, LinkedIn and other profile URLs when PDL returns them | Skipped without `PDL_API_KEY`. v1 is email-only. No emails, phones, birth dates, or street addresses are stored or shown. Missing fields stay empty |
 | Numverify | optional API | phone | Carrier/line JSON | Skipped without `NUMVERIFY_API_KEY` |

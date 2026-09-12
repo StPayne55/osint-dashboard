@@ -18,6 +18,11 @@ def test_name_dorks_lead_with_linkedin():
     assert any("profile search" in f.title.lower() for f in linkedin)
     assert any("people search" in f.title.lower() for f in linkedin)
     assert "grace hopper" in links[0].value.lower()
+    images = next(f for f in links if "google images" in f.title.lower())
+    assert images.extra.get("tab") == "images"
+    assert images.extra.get("manual") is True
+    assert "tbm=isch" in (images.url or "") or "udm=2" in (images.url or "")
+    assert "grace+hopper" in (images.url or "").lower() or "grace%20hopper" in (images.url or "").lower()
 
 
 def test_email_dorks_include_linkedin_profile_search():
@@ -31,6 +36,7 @@ def test_email_dorks_include_linkedin_profile_search():
     assert "linkedin.com/in" in hit.value
     assert "ada@example.com" in hit.value
     assert "ada" in hit.value.lower()
+    assert not any("google images" in f.title.lower() for f in links)
 
 
 def test_username_dorks_include_linkedin_profile_search():
@@ -44,6 +50,9 @@ def test_username_dorks_include_linkedin_profile_search():
     assert "linkedin.com/in" in hit.value
     assert "torvalds" in hit.value
     assert "google.com/search" in (hit.url or "")
+    images = next(f for f in links if "google images" in f.title.lower())
+    assert "torvalds" in (images.value or "").lower()
+    assert images.extra.get("tab") == "images"
 
 
 def test_email_linkedin_dork_keeps_site_scoped():
