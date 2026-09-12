@@ -63,7 +63,7 @@ cd backend && PYTHONPATH=. pytest
 | Search links / dorks | built-in | all | Google, DuckDuckGo, Bing, LinkedIn, plus labeled reverse-lookup links for phones | Links only; no scraping |
 | HIBP | optional API | email | Breach titles | Skipped without `HIBP_API_KEY` |
 | Numverify | optional API | phone | Carrier/line JSON | Skipped without `NUMVERIFY_API_KEY` |
-| Twilio Lookup | optional API | phone | US CNAM caller name + line-type intelligence | Skipped without `TWILIO_ACCOUNT_SID` + `TWILIO_AUTH_TOKEN`. Empty CNAM is left empty |
+| Twilio Lookup | optional API | phone | US CNAM caller name + line-type intelligence | Skipped without `TWILIO_ACCOUNT_SID` + `TWILIO_AUTH_TOKEN`. Empty CNAM means no caller name on file (common for mobiles), never invented |
 | AbstractAPI phone | optional API | phone | Validation, carrier, location | Skipped without `ABSTRACT_PHONE_API_KEY`. Not a subscriber name |
 
 The in-app **Catalog** page repeats this list from the live backend (`GET /api/catalog`).

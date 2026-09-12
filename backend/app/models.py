@@ -122,7 +122,8 @@ PHONE_HONESTY = (
     "Free phone scanners report carrier, region, line type, and whether a "
     "number appears registered on a few public sites. They cannot name the "
     "subscriber. A caller name (CNAM) only appears if you set Twilio Lookup "
-    "keys — empty CNAM is left empty, never invented. Use the labeled reverse-lookup "
+    "keys — empty CNAM means no caller name on file (common for mobile "
+    "numbers), never invented. Use the labeled reverse-lookup "
     "search links (Whitepages, Thatsthem, FastPeopleSearch, TruePeopleSearch, "
     "Spokeo, 411) for manual follow-up."
 )

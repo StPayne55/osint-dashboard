@@ -12,7 +12,7 @@ from app.models import Finding, ModuleStatus, ScannerResult
 from app.profile_urls import is_concrete_profile_url
 from app.scanners.harvester_scan import HarvesterScanner
 from app.scanners.phone_scan import PhoneScanner
-from app.scanners.twilio_scan import _findings_from_lookup
+from app.scanners.twilio_scan import EMPTY_CNAM_NOTE, _findings_from_lookup
 
 
 def test_consumer_mail_denylist():
@@ -131,9 +131,28 @@ def test_twilio_empty_cnam_is_honest():
         {"phone_number": "+14155552671", "caller_name": {"caller_name": None, "caller_type": None}}
     )
     assert name is None
-    assert any("empty" in f.value.lower() or "no subscriber" in f.value.lower() for f in findings)
+    cnam_notes = [f for f in findings if f.title.startswith("Caller name")]
+    assert cnam_notes
+    assert cnam_notes[0].kind == "note"
+    assert cnam_notes[0].value == EMPTY_CNAM_NOTE
+    assert "no caller name on file" in cnam_notes[0].value.lower()
+    assert "error" not in cnam_notes[0].value.lower()
+    missing_field, missing_name = _findings_from_lookup({"phone_number": "+14155552671"})
+    assert missing_name is None
+    assert any(f.value == EMPTY_CNAM_NOTE for f in missing_field)
     named, got = _findings_from_lookup(
         {"caller_name": {"caller_name": "MODERN ATMOSPHERE LLC", "caller_type": "UNDETERMINED"}}
     )
     assert got == "MODERN ATMOSPHERE LLC"
     assert any(f.kind == "metadata" and f.title.startswith("Caller name") for f in named)
+
+
+def test_twilio_cnam_quota_error_stays_error():
+    findings, name = _findings_from_lookup(
+        {"caller_name": {"caller_name": None, "error_code": 60627}}
+    )
+    assert name is None
+    note = next(f for f in findings if f.title.startswith("Caller name"))
+    assert "error" in note.value.lower()
+    assert "60627" in note.value
+    assert note.value != EMPTY_CNAM_NOTE

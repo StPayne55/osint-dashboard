@@ -8,6 +8,11 @@ from app.config import TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, USER_AGENT
 from app.models import Finding, Query, QueryType, ScannerResult
 from app.scanners.base import Scanner
 
+# Empty CNAM is a successful lookup with no name — not a scanner failure.
+EMPTY_CNAM_NOTE = (
+    "No caller name on file (common for mobile numbers — CNAM often blank)."
+)
+
 
 class TwilioLookupScanner(Scanner):
     id = "twilio"
@@ -21,8 +26,8 @@ class TwilioLookupScanner(Scanner):
     optional_key = "TWILIO_ACCOUNT_SID"
     limitations = (
         "Skipped without Twilio credentials. Caller name is a paid Lookup add-on "
-        "and is often empty for cell numbers. Empty CNAM is reported as empty — "
-        "this module never invents a subscriber name."
+        "and is often empty for cell numbers. Empty CNAM means no caller name on "
+        "file — not an error. This module never invents a subscriber name."
     )
     timeout = 15.0
 
@@ -62,10 +67,26 @@ class TwilioLookupScanner(Scanner):
             )
 
         findings, caller = _findings_from_lookup(data if isinstance(data, dict) else {})
+        cnam_error = next(
+            (
+                f
+                for f in findings
+                if f.title.lower().startswith("caller name") and "error" in f.value.lower()
+            ),
+            None,
+        )
         if caller:
-            summary = f"CNAM: {caller}"
-        elif any(f.title.lower().startswith("caller name") for f in findings):
-            summary = "Twilio returned no subscriber name"
+            return self._result("success", f"CNAM: {caller}", findings=findings, raw=data)
+        if cnam_error:
+            return self._result(
+                "error",
+                "Twilio CNAM add-on error",
+                findings=findings,
+                error=cnam_error.value,
+                raw=data,
+            )
+        if any(f.value == EMPTY_CNAM_NOTE for f in findings):
+            summary = EMPTY_CNAM_NOTE
         else:
             summary = "Twilio line metadata (no CNAM field)"
         return self._result("success", summary, findings=findings, raw=data)
@@ -119,7 +140,7 @@ def _findings_from_lookup(data: dict[str, Any]) -> tuple[list[Finding], str | No
                 Finding(
                     kind="note",
                     title="Caller name (CNAM)",
-                    value="No subscriber name returned. Empty CNAM is left empty — not invented.",
+                    value=EMPTY_CNAM_NOTE,
                 )
             )
     elif cnam is None:
@@ -127,10 +148,7 @@ def _findings_from_lookup(data: dict[str, Any]) -> tuple[list[Finding], str | No
             Finding(
                 kind="note",
                 title="Caller name (CNAM)",
-                value=(
-                    "Twilio did not return a caller_name field. The CNAM add-on "
-                    "may be off; subscriber name is unknown."
-                ),
+                value=EMPTY_CNAM_NOTE,
             )
         )
 
