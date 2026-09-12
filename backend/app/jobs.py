@@ -7,6 +7,7 @@ from collections import defaultdict, deque
 from typing import Any, AsyncIterator
 
 from app.config import (
+    HEAVY_SCANNER_CONCURRENCY,
     JOB_TTL_SEC,
     MAX_JOBS,
     RATE_LIMIT_SCANS,
@@ -19,6 +20,26 @@ from app.scanners import all_scanners
 from app.scanners.base import Scanner
 
 Event = dict[str, Any]
+
+_heavy_sema: asyncio.Semaphore | None = None
+
+
+def is_heavy_scanner(scanner: Scanner) -> bool:
+    return bool(getattr(scanner, "heavy", False))
+
+
+def reset_heavy_gate(concurrency: int | None = None) -> asyncio.Semaphore:
+    """Replace the shared heavy-scanner semaphore (tests / config reload)."""
+    global _heavy_sema
+    n = max(1, concurrency if concurrency is not None else HEAVY_SCANNER_CONCURRENCY)
+    _heavy_sema = asyncio.Semaphore(n)
+    return _heavy_sema
+
+
+def heavy_scanner_gate() -> asyncio.Semaphore:
+    if _heavy_sema is None:
+        return reset_heavy_gate()
+    return _heavy_sema
 
 
 class RateLimited(Exception):
@@ -75,6 +96,7 @@ class Job:
         self.history: list[Event] = []
         self.subscribers: list[asyncio.Queue[Event | None]] = []
         self.results: dict[str, ScannerResult] = {}
+        self.module_state: dict[str, str] = {}
         self.status = "queued"
         self.finished_at: float | None = None
 
@@ -104,11 +126,14 @@ class Job:
                 findings[scanner.id] = result.findings
                 modules.append(result.status)
             else:
+                live = self.module_state.get(scanner.id)
+                if live not in {"queued", "running"}:
+                    live = "queued" if self.status != "completed" else "skipped"
                 modules.append(
                     ModuleStatus(
                         id=scanner.id,
                         name=scanner.name,
-                        status="queued" if self.status != "completed" else "skipped",
+                        status=live,  # type: ignore[arg-type]
                     )
                 )
         identity = _identity(self.query, list(self.results.values()))
@@ -242,9 +267,22 @@ async def _run_scanner(job: Job, scanner: Scanner) -> None:
         job.emit({"type": "scanner", "id": scanner.id, "status": "unavailable", "result": result.model_dump()})
         return
 
+    if is_heavy_scanner(scanner):
+        job.module_state[scanner.id] = "queued"
+        job.emit({"type": "scanner", "id": scanner.id, "name": scanner.name, "status": "queued"})
+        async with heavy_scanner_gate():
+            await _execute_scanner(job, scanner)
+        return
+    await _execute_scanner(job, scanner)
+
+
+async def _execute_scanner(job: Job, scanner: Scanner) -> None:
+    job.module_state[scanner.id] = "running"
     job.emit({"type": "scanner", "id": scanner.id, "name": scanner.name, "status": "running"})
     started = time.time()
     try:
+        # Timeout starts after the heavy-scanner slot is acquired so queued
+        # wait time does not burn the module wall clock.
         result = await asyncio.wait_for(scanner.run(job.query), timeout=scanner.timeout)
     except asyncio.TimeoutError:
         result = scanner._result(
@@ -258,6 +296,7 @@ async def _run_scanner(job: Job, scanner: Scanner) -> None:
     result.status.duration_ms = int((time.time() - started) * 1000)
     result.status.finding_count = len(result.findings)
     job.results[scanner.id] = result
+    job.module_state.pop(scanner.id, None)
     job.emit(
         {
             "type": "scanner",

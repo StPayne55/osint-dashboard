@@ -6,6 +6,7 @@ from app.detect import build_query
 from app.scanners import all_scanners
 from app.scanners.maigret_scan import (
     MaigretScanner,
+    _site_limits,
     derive_username,
     findings_from_results,
 )
@@ -44,6 +45,16 @@ SAMPLE = {
         "is_similar": True,
     },
 }
+
+
+def test_default_top_sites_is_small_for_render():
+    from app.config import MAIGRET_TOP_SITES
+
+    assert MAIGRET_TOP_SITES == 50
+    top, subset, excluded = _site_limits()
+    assert subset is True
+    assert top == 50
+    assert "porn" in excluded
 
 
 def test_maigret_registered_with_spiderfoot():

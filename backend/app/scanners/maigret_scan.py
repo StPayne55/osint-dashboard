@@ -7,6 +7,7 @@ from typing import Any
 
 from app.config import (
     MAIGRET_FULL,
+    MAIGRET_MAX_CONNECTIONS,
     MAIGRET_NSFW,
     MAIGRET_PARSE,
     MAIGRET_SITE_TIMEOUT,
@@ -139,12 +140,13 @@ class MaigretScanner(Scanner):
     )
     accepts = [QueryType.username, QueryType.email, QueryType.name]
     limitations = (
-        "Default run uses the top-ranked site slice (MAIGRET_TOP_SITES, default 200) "
+        "Default run uses the top-ranked site slice (MAIGRET_TOP_SITES, default 50) "
         "and skips disabled, NSFW, and .onion sites. Soft-404s still happen. "
         "Set MAIGRET_FULL=1 for the complete enabled list (slower). "
         "Missing package → unavailable."
     )
     timeout = MAIGRET_TIMEOUT
+    heavy = True
 
     def available(self) -> bool:
         return _load_maigret() is not None
@@ -212,6 +214,7 @@ class MaigretScanner(Scanner):
             "off",
         }
         site_timeout = float(os.getenv("MAIGRET_SITE_TIMEOUT", str(MAIGRET_SITE_TIMEOUT)))
+        max_conn = int(os.getenv("MAIGRET_MAX_CONNECTIONS", str(MAIGRET_MAX_CONNECTIONS)))
         results = await maigret_search(
             username=username,
             site_dict=site_dict,
@@ -221,7 +224,7 @@ class MaigretScanner(Scanner):
             is_parsing_enabled=parse,
             is_enrich_enabled=False,
             id_type="username",
-            max_connections=40,
+            max_connections=max(2, max_conn),
             no_progressbar=True,
             retries=0,
             check_domains=False,

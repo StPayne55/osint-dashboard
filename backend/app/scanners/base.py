@@ -15,6 +15,8 @@ class Scanner(ABC):
     optional_key: str | None = None
     limitations: str = ""
     timeout: float = 45.0
+    # Network-heavy social crawlers share HEAVY_SCANNER_CONCURRENCY slots.
+    heavy: bool = False
 
     def applicable(self, query: Query) -> bool:
         return query.type in self.accepts

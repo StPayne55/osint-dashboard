@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+import os
 import pkgutil
 from typing import Any
 
@@ -57,6 +58,7 @@ class HoleheScanner(Scanner):
         "A miss is not proof the email is unused. Does not return passwords or dumps."
     )
     timeout = HOLEHE_TIMEOUT
+    heavy = True
 
     def available(self) -> bool:
         return _load_holehe() is not None
@@ -82,25 +84,66 @@ class HoleheScanner(Scanner):
                 error="No holehe site modules found",
             )
 
-        def _sync() -> list[dict[str, Any]]:
-            async def _scan() -> list[dict[str, Any]]:
+        wall = float(os.getenv("HOLEHE_TIMEOUT", self.timeout))
+        pad = 5.0 if wall >= 20 else max(0.05, wall * 0.2)
+        inner = max(0.05, wall - pad)
+
+        def _sync() -> tuple[list[dict[str, Any]], bool]:
+            async def _scan() -> tuple[list[dict[str, Any]], bool]:
                 out: list[dict[str, Any]] = []
                 client = httpx.AsyncClient(timeout=8.0)
+                timed_out = False
                 try:
-                    async with trio.open_nursery() as nursery:
-                        for fn in functions:
-                            nursery.start_soon(self._launch, fn, email, client, out)
+                    with trio.move_on_after(inner) as cancel_scope:
+                        async with trio.open_nursery() as nursery:
+                            for fn in functions:
+                                nursery.start_soon(self._launch, fn, email, client, out)
+                    timed_out = cancel_scope.cancelled_caught
                 finally:
                     await client.aclose()
-                return out
+                return out, timed_out
 
             return trio.run(_scan)
 
         try:
-            raw = await asyncio.to_thread(_sync)
+            raw, timed_out = await asyncio.to_thread(_sync)
         except Exception as exc:
             return self._result("error", "holehe failed", error=str(exc))
 
+        findings, exists, limited = self._findings_from_raw(raw)
+        summary = (
+            f"{len(exists)} site(s) report this email as registered"
+            if exists
+            else "No site reported a registration"
+        )
+        if limited:
+            summary += f" · {len(limited)} rate-limited"
+        raw_payload = {
+            "checked": len(raw),
+            "exists": exists,
+            "rate_limited": [r.get("domain") for r in limited],
+            "partial": timed_out,
+        }
+        if timed_out:
+            if findings:
+                summary += " · partial (timed out)"
+            return self._result(
+                "timeout",
+                summary if findings else f"Timed out after {int(inner)}s",
+                findings=findings,
+                raw=raw_payload,
+                error="timeout",
+            )
+        return self._result(
+            "success",
+            summary,
+            findings=findings,
+            raw=raw_payload,
+        )
+
+    def _findings_from_raw(
+        self, raw: list[dict[str, Any]]
+    ) -> tuple[list[Finding], list[dict[str, Any]], list[dict[str, Any]]]:
         findings: list[Finding] = []
         exists = [r for r in raw if r.get("exists") and not r.get("rateLimit")]
         limited = [r for r in raw if r.get("rateLimit")]
@@ -134,24 +177,7 @@ class HoleheScanner(Scanner):
                     extra=extra,
                 )
             )
-
-        summary = (
-            f"{len(exists)} site(s) report this email as registered"
-            if exists
-            else "No site reported a registration"
-        )
-        if limited:
-            summary += f" · {len(limited)} rate-limited"
-        return self._result(
-            "success",
-            summary,
-            findings=findings,
-            raw={
-                "checked": len(raw),
-                "exists": exists,
-                "rate_limited": [r.get("domain") for r in limited],
-            },
-        )
+        return findings, exists, limited
 
     @staticmethod
     async def _launch(module: Any, email: str, client: Any, out: list) -> None:

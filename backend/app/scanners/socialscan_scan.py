@@ -21,6 +21,7 @@ class SocialscanScanner(Scanner):
         "or reserved — not a profile URL. Some platforms have dropped their public checkers."
     )
     timeout = SOCIALSCAN_TIMEOUT
+    heavy = True
 
     def available(self) -> bool:
         try:
