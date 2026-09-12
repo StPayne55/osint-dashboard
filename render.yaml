@@ -44,7 +44,6 @@ services:
     region: oregon
     dockerfilePath: ./spiderfoot-runner/Dockerfile
     dockerContext: .
-    healthCheckPath: /health
     autoDeployTrigger: commit
     maxShutdownDelaySeconds: 120
     envVars:
