@@ -132,7 +132,7 @@ export function Home() {
           <ul className="limits">
             <li>See which public sites appear to have an email or username.</li>
             <li>Pull extra social/account profile URLs from Maigret and open-source SpiderFoot (not HX).</li>
-            <li>Pull a Gravatar photo and self-published profile if one exists.</li>
+            <li>Surface Gravatar and public Maigret display photos in the report (no image scraping).</li>
             <li>Parse a phone into country, carrier dataset, and line type.</li>
             <li>Hand you Google / DuckDuckGo / LinkedIn dorks for manual follow-up.</li>
           </ul>

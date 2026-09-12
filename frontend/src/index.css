@@ -827,6 +827,118 @@ a.btn:hover {
   box-shadow: 0 0 12px rgba(0, 240, 255, 0.2);
 }
 
+.photo-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: -6px 0 20px;
+}
+
+.photo-gallery {
+  gap: 14px;
+}
+
+.photo-card {
+  margin: 0;
+  width: 148px;
+  background: var(--glass-strong);
+  border: 1px solid var(--line);
+  box-shadow: 0 0 16px rgba(0, 240, 255, 0.12);
+  backdrop-filter: blur(10px);
+}
+
+.photo-card a {
+  display: block;
+  color: inherit;
+}
+
+.photo-card a:hover {
+  text-shadow: none;
+}
+
+.photo-card img,
+.photo-fallback {
+  display: block;
+  width: 146px;
+  height: 146px;
+  object-fit: cover;
+  background: #000;
+  border-bottom: 1px solid rgba(0, 240, 255, 0.18);
+}
+
+.photo-card.compact {
+  width: 92px;
+}
+
+.photo-card.compact img,
+.photo-card.compact .photo-fallback {
+  width: 90px;
+  height: 90px;
+}
+
+.photo-fallback {
+  display: grid;
+  place-items: center;
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border: 1px dashed rgba(255, 77, 122, 0.45);
+  box-sizing: border-box;
+}
+
+.photo-card figcaption {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 8px 8px;
+  min-height: 38px;
+}
+
+.photo-card.compact figcaption {
+  padding: 5px 6px 6px;
+  min-height: 0;
+}
+
+.photo-title {
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.photo-source {
+  color: var(--cyan);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.photo-dorks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.photo-dork {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  background: var(--cyan-dim);
+  color: var(--cyan);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.photo-dork:hover {
+  border-color: var(--magenta);
+  color: #9ffffe;
+}
+
 .honesty {
   border-color: rgba(177, 76, 255, 0.4);
   color: var(--muted);

@@ -13,6 +13,10 @@ def _g(q: str) -> str:
     return f"https://www.google.com/search?q={quote_plus(q)}"
 
 
+def _g_images(q: str) -> str:
+    return f"https://www.google.com/search?udm=2&tbm=isch&q={quote_plus(q)}"
+
+
 def _ddg(q: str) -> str:
     return f"https://duckduckgo.com/?q={quote_plus(q)}"
 
@@ -96,6 +100,17 @@ def build_dorks(query: Query) -> list[Finding]:
             )
         )
 
+    def add_images(title: str, q: str) -> None:
+        links.append(
+            Finding(
+                kind="link",
+                title=title,
+                value=q,
+                url=_g_images(q),
+                extra={"engine": "google", "manual": True, "tab": "images"},
+            )
+        )
+
     raw = query.raw
     if query.type == QueryType.email and query.email:
         email = query.email
@@ -171,6 +186,7 @@ def build_dorks(query: Query) -> list[Finding]:
             _linkedin_people_url(name),
         )
         add("Google — quoted name", f'"{name}"')
+        add_images("Google Images — quoted name (manual)", f'"{name}"')
         add("DuckDuckGo — name", f'"{name}"', "ddg")
         add("Bing — name", f'"{name}"', "bing")
         add("Google — name + email", f'"{name}" ("@" OR email OR contact)')
@@ -185,6 +201,7 @@ def build_dorks(query: Query) -> list[Finding]:
         user = query.username or raw.lstrip("@")
         add("LinkedIn — profile search", _linkedin_profile_query([user], path_user=user))
         add("Google — exact username", f'"{user}"')
+        add_images("Google Images — quoted username (manual)", f'"{user}"')
         add("DuckDuckGo — username", f'"{user}"', "ddg")
         add("Bing — username", f'"{user}"', "bing")
         add("Google — username + social", f'"{user}" (twitter OR instagram OR github OR telegram)')

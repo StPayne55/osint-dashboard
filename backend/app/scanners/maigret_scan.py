@@ -21,11 +21,12 @@ from app.detect import (
     social_username_candidates,
 )
 from app.models import Finding, Query, QueryType, ScannerResult
+from app.photos import PHOTO_KEYS, iter_photo_urls
 from app.profile_urls import is_concrete_profile_url
 from app.scanners.base import Scanner
 
 _NSFW_TAGS = ("porn", "xxx", "webcam", "erotic")
-_PHOTO_KEYS = ("image", "avatar", "photo", "picture", "profile_image", "gravatar")
+_PHOTO_KEYS = PHOTO_KEYS
 _NAME_KEYS = ("fullname", "full_name", "name", "display_name", "username")
 
 _log = logging.getLogger("osint.maigret")
@@ -112,15 +113,14 @@ def findings_from_results(results: dict[str, Any], username: str) -> list[Findin
                 extra=extra,
             )
         )
-        photo = next((ids_data.get(k) for k in _PHOTO_KEYS if ids_data.get(k)), None)
-        if isinstance(photo, str) and photo.startswith(("http://", "https://")):
+        for photo in iter_photo_urls([ids_data.get(k) for k in _PHOTO_KEYS if ids_data.get(k)]):
             add(
                 Finding(
                     kind="image",
                     title=f"{title} photo",
                     value=photo,
                     url=photo,
-                    extra={"username": username, "site": title},
+                    extra={"username": username, "site": title, "source": "maigret"},
                 )
             )
     return findings

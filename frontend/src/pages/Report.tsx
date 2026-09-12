@@ -9,11 +9,13 @@ import {
   type Report,
   type ScanEvent,
 } from "../lib/api";
+import { collectPhotoFindings, isImageDork, type PhotoItem } from "../lib/photos";
 
 const PHONE_SCANNER_IDS = ["phone", "numverify", "twilio", "whitepages"] as const;
 
 const SECTIONS: { id: string; title: string; kinds: Finding["kind"][]; scanners?: string[] }[] = [
   { id: "identity", title: "Identity summary", kinds: [] },
+  { id: "images", title: "Photos / Avatars", kinds: ["image"] },
   { id: "emails", title: "Emails", kinds: ["email"] },
   {
     id: "phone",
@@ -22,7 +24,6 @@ const SECTIONS: { id: string; title: string; kinds: Finding["kind"][]; scanners?
     scanners: [...PHONE_SCANNER_IDS],
   },
   { id: "social", title: "Social profiles", kinds: ["profile"] },
-  { id: "images", title: "Images", kinds: ["image"] },
   { id: "usernames", title: "Username candidates", kinds: ["username"] },
   { id: "dorks", title: "Search links / dorks", kinds: ["link"] },
   { id: "notes", title: "Notes", kinds: ["note", "breach"] },
@@ -33,6 +34,9 @@ const PHONE_SECTION_BLURB =
 
 const DORKS_SECTION_BLURB =
   "LinkedIn rows sit at the top for name, email, and username lookups. They open a Google profile dork or LinkedIn people search in your browser (login may be required). This desk never scrapes LinkedIn.";
+
+const PHOTOS_SECTION_BLURB =
+  "Public avatars only: Gravatar when the owner published one, plus display photos Maigret parsed from claimed profiles. Extra image/photo/avatar URLs on a finding are collected when they are concrete http(s) links. No LinkedIn, Google Images, or face-search scraping.";
 
 /** Homepage of a registrable domain (https://instagram.com/) is not a profile. */
 export function isConcreteProfileUrl(url?: string | null): boolean {
@@ -137,6 +141,8 @@ export function ReportPage() {
     () => allFindings.filter((f) => f.kind === "profile" && isConcreteProfileUrl(f.url)),
     [allFindings],
   );
+  const photoItems = useMemo(() => collectPhotoFindings(allFindings), [allFindings]);
+  const imageDorks = useMemo(() => allFindings.filter(isImageDork), [allFindings]);
   const phoneMeta = useMemo(
     () => derivePhoneMeta(findings, report?.identity),
     [findings, report],
@@ -203,8 +209,8 @@ export function ReportPage() {
           <span>Profiles</span>
         </div>
         <div className="stat">
-          <b>{uniq(allFindings, "image").length}</b>
-          <span>Images</span>
+          <b>{photoItems.length}</b>
+          <span>Photos</span>
         </div>
         <div className="stat">
           <b>
@@ -214,6 +220,14 @@ export function ReportPage() {
           <span>Modules done</span>
         </div>
       </div>
+
+      {photoItems.length > 0 && (
+        <div className="photo-strip" aria-label="Photos and avatars">
+          {photoItems.slice(0, 8).map((photo, i) => (
+            <PhotoCard key={`${photo.url}-${i}`} photo={photo} compact />
+          ))}
+        </div>
+      )}
 
       {(phoneMeta.callerName || phoneMeta.ownerName || phoneMeta.carrier || phoneMeta.region || phoneMeta.lineType) && (
         <div className="identity phone-meta">
@@ -293,7 +307,7 @@ export function ReportPage() {
               <section className="section" key={section.id} id={section.id}>
                 <h3>
                   {section.title}{" "}
-                  <span className="meta">{unique.length}</span>
+                  <span className="meta">{section.id === "images" ? photoItems.length : unique.length}</span>
                 </h3>
                 {section.id === "phone" && (
                   <p className="section-blurb">{PHONE_SECTION_BLURB}</p>
@@ -301,18 +315,38 @@ export function ReportPage() {
                 {section.id === "dorks" && (
                   <p className="section-blurb">{DORKS_SECTION_BLURB}</p>
                 )}
+                {section.id === "images" && (
+                  <p className="section-blurb">{PHOTOS_SECTION_BLURB}</p>
+                )}
                 {section.id === "images" ? (
-                  unique.length ? (
-                    <div className="images">
-                      {unique.map((f, i) => (
-                        <a key={i} href={f.url || f.value} target="_blank" rel="noreferrer">
-                          <img src={f.url || f.value} alt={f.title} />
-                        </a>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="empty">No public profile image found.</p>
-                  )
+                  <>
+                    {photoItems.length ? (
+                      <div className="images photo-gallery">
+                        {photoItems.map((photo, i) => (
+                          <PhotoCard key={`${photo.url}-${i}`} photo={photo} />
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="empty">
+                        {running ? "Still collecting…" : "No public profile photo found."}
+                      </p>
+                    )}
+                    {imageDorks.length > 0 && (
+                      <div className="photo-dorks">
+                        {imageDorks.map((f, i) => (
+                          <a
+                            key={`${f.title}-${i}`}
+                            className="photo-dork"
+                            href={findingHref(f) || undefined}
+                            target="_blank"
+                            rel="noreferrer noopener"
+                          >
+                            {f.title}
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                  </>
                 ) : unique.length ? (
                   <div className="findings">
                     {unique.map((f, i) => (
@@ -358,6 +392,32 @@ export function ReportPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+function PhotoCard({ photo, compact = false }: { photo: PhotoItem; compact?: boolean }) {
+  const [broken, setBroken] = useState(false);
+  return (
+    <figure className={`photo-card${compact ? " compact" : ""}${broken ? " broken" : ""}`}>
+      <a href={photo.url} target="_blank" rel="noreferrer noopener">
+        {broken ? (
+          <div className="photo-fallback" role="img" aria-label={`${photo.title} failed to load`}>
+            broken image
+          </div>
+        ) : (
+          <img
+            src={photo.url}
+            alt={photo.title}
+            referrerPolicy="no-referrer"
+            onError={() => setBroken(true)}
+          />
+        )}
+      </a>
+      <figcaption>
+        <span className="photo-title">{photo.title}</span>
+        {photo.source ? <span className="photo-source">{photo.source}</span> : null}
+      </figcaption>
+    </figure>
   );
 }
 

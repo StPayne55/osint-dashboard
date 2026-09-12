@@ -15,6 +15,7 @@ from app.config import (
 )
 from app.consumer_mail import HARVEST_EMAIL_CAP, email_local_part, is_consumer_mail_domain
 from app.models import Finding, IdentitySummary, ModuleStatus, PHONE_HONESTY, Query, QueryType, Report, ScannerResult
+from app.photos import collect_photo_findings, promote_extra_photos
 from app.profile_urls import is_concrete_profile_url
 from app.scanners import all_scanners
 from app.scanners.base import Scanner
@@ -123,7 +124,7 @@ class Job:
         for scanner in all_scanners():
             result = self.results.get(scanner.id)
             if result:
-                findings[scanner.id] = result.findings
+                findings[scanner.id] = promote_extra_photos(list(result.findings))
                 modules.append(result.status)
             else:
                 live = self.module_state.get(scanner.id)
@@ -159,7 +160,6 @@ def _identity(query: Query, results: list[ScannerResult]) -> IdentitySummary:
     usernames: list[str] = []
     notes: list[str] = []
     profiles = 0
-    images = 0
     phone_carrier: str | None = None
     phone_region: str | None = None
     phone_line_type: str | None = None
@@ -180,8 +180,6 @@ def _identity(query: Query, results: list[ScannerResult]) -> IdentitySummary:
             elif finding.kind == "profile":
                 if is_concrete_profile_url(finding.url):
                     profiles += 1
-            elif finding.kind == "image":
-                images += 1
             elif finding.kind == "note":
                 notes.append(finding.value)
 
@@ -211,6 +209,8 @@ def _identity(query: Query, results: list[ScannerResult]) -> IdentitySummary:
             for e in emails
             if e.lower() == q or email_local_part(e) == q_local
         ]
+
+    images = len(collect_photo_findings(f for result in results for f in result.findings))
 
     return IdentitySummary(
         query=query,

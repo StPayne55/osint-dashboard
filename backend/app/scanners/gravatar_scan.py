@@ -7,8 +7,66 @@ import httpx
 
 from app.config import USER_AGENT
 from app.models import Finding, Query, QueryType, ScannerResult
+from app.photos import photos_from_mapping, promote_extra_photos
 from app.profile_urls import is_concrete_profile_url
 from app.scanners.base import Scanner
+
+
+def gravatar_avatar_url(digest: str) -> str:
+    return f"https://www.gravatar.com/avatar/{digest}?s=256&d=404"
+
+
+def findings_from_profile_entry(entry: dict[str, Any], digest: str) -> list[Finding]:
+    """Display name, accounts, and any extra published photo URLs."""
+    findings: list[Finding] = []
+    display = entry.get("displayName") or entry.get("preferredUsername")
+    if display:
+        findings.append(Finding(kind="metadata", title="Display name", value=str(display)))
+    if entry.get("aboutMe"):
+        findings.append(Finding(kind="note", title="About", value=str(entry["aboutMe"])[:500]))
+    if entry.get("currentLocation"):
+        findings.append(
+            Finding(kind="metadata", title="Location (self-published)", value=str(entry["currentLocation"]))
+        )
+    for acc in entry.get("accounts") or []:
+        url = acc.get("url")
+        profile_url = url if is_concrete_profile_url(url if isinstance(url, str) else None) else None
+        findings.append(
+            Finding(
+                kind="profile" if profile_url else "note",
+                title=str(acc.get("shortname") or acc.get("domain") or "account"),
+                value=str(acc.get("display") or url or ""),
+                url=profile_url,
+            )
+        )
+    for im in entry.get("ims") or []:
+        findings.append(
+            Finding(
+                kind="metadata",
+                title=f"IM ({im.get('type')})",
+                value=str(im.get("value") or ""),
+            )
+        )
+    for url in entry.get("urls") or []:
+        findings.append(
+            Finding(
+                kind="link",
+                title=str(url.get("title") or "Profile URL"),
+                value=str(url.get("value") or ""),
+                url=url.get("value"),
+            )
+        )
+    extra_photos = photos_from_mapping(entry)
+    if extra_photos:
+        findings.append(
+            Finding(
+                kind="metadata",
+                title="Gravatar profile photos",
+                value=str(len(extra_photos)),
+                extra={"source": "gravatar", "photos": extra_photos, "hash": digest},
+            )
+        )
+    return findings
 
 
 class GravatarScanner(Scanner):
@@ -31,7 +89,7 @@ class GravatarScanner(Scanner):
         if not email:
             return self._result("skipped", "No email")
         digest = hashlib.md5(email.encode("utf-8"), usedforsecurity=False).hexdigest()
-        avatar = f"https://www.gravatar.com/avatar/{digest}?s=256&d=404"
+        avatar = gravatar_avatar_url(digest)
         json_url = f"https://www.gravatar.com/{digest}.json"
         findings: list[Finding] = [
             Finding(
@@ -63,52 +121,17 @@ class GravatarScanner(Scanner):
                     title="Gravatar avatar",
                     value=avatar,
                     url=avatar,
-                    extra={"hash": digest},
+                    extra={"hash": digest, "source": "gravatar"},
                 )
             )
         entry = None
         if isinstance(profile, dict):
             entries = profile.get("entry") or []
-            if entries:
+            if entries and isinstance(entries[0], dict):
                 entry = entries[0]
         if entry:
-            display = entry.get("displayName") or entry.get("preferredUsername")
-            if display:
-                findings.append(Finding(kind="metadata", title="Display name", value=str(display)))
-            if entry.get("aboutMe"):
-                findings.append(Finding(kind="note", title="About", value=str(entry["aboutMe"])[:500]))
-            if entry.get("currentLocation"):
-                findings.append(
-                    Finding(kind="metadata", title="Location (self-published)", value=str(entry["currentLocation"]))
-                )
-            for acc in entry.get("accounts") or []:
-                url = acc.get("url")
-                profile_url = url if is_concrete_profile_url(url if isinstance(url, str) else None) else None
-                findings.append(
-                    Finding(
-                        kind="profile" if profile_url else "note",
-                        title=str(acc.get("shortname") or acc.get("domain") or "account"),
-                        value=str(acc.get("display") or url or ""),
-                        url=profile_url,
-                    )
-                )
-            for im in entry.get("ims") or []:
-                findings.append(
-                    Finding(
-                        kind="metadata",
-                        title=f"IM ({im.get('type')})",
-                        value=str(im.get("value") or ""),
-                    )
-                )
-            for url in entry.get("urls") or []:
-                findings.append(
-                    Finding(
-                        kind="link",
-                        title=str(url.get("title") or "Profile URL"),
-                        value=str(url.get("value") or ""),
-                        url=url.get("value"),
-                    )
-                )
+            findings.extend(findings_from_profile_entry(entry, digest))
+        findings = promote_extra_photos(findings)
         summary = (
             "Public Gravatar profile found"
             if entry or has_avatar
