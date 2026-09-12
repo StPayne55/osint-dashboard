@@ -58,7 +58,7 @@ def test_registered_heavy_scanners():
     heavy = {s.id for s in all_scanners() if is_heavy_scanner(s)}
     assert heavy == {"holehe", "socialscan", "sherlock", "maigret", "spiderfoot"}
     light = {s.id for s in all_scanners() if not is_heavy_scanner(s)}
-    for sid in ("usernames", "email_intel", "gravatar", "dorks", "twilio", "hibp"):
+    for sid in ("usernames", "email_intel", "gravatar", "dorks", "twilio", "hibp", "whitepages"):
         assert sid in light
 
 

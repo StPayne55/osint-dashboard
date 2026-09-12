@@ -88,6 +88,7 @@ TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID", "").strip()
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "").strip()
 ABSTRACT_PHONE_API_KEY = os.getenv("ABSTRACT_PHONE_API_KEY", "").strip()
 PDL_API_KEY = os.getenv("PDL_API_KEY", "").strip()
+WHITEPAGES_API_KEY = os.getenv("WHITEPAGES_API_KEY", "").strip()
 
 # Rate limit: scans per window per client IP.
 RATE_LIMIT_SCANS = int(os.getenv("RATE_LIMIT_SCANS", "12"))

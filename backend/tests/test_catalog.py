@@ -18,6 +18,7 @@ def test_catalog_lists_core_scanners(monkeypatch):
     monkeypatch.delenv("SPIDERFOOT_URL", raising=False)
     monkeypatch.delenv("SPIDERFOOT_RUNNER_TOKEN", raising=False)
     monkeypatch.delenv("PDL_API_KEY", raising=False)
+    monkeypatch.delenv("WHITEPAGES_API_KEY", raising=False)
     r = client.get("/api/catalog")
     assert r.status_code == 200
     ids = {s["id"] for s in r.json()["scanners"]}
@@ -32,6 +33,7 @@ def test_catalog_lists_core_scanners(monkeypatch):
         "harvester",
         "hibp",
         "pdl",
+        "whitepages",
         "twilio",
         "numverify",
         "spiderfoot",
@@ -44,6 +46,11 @@ def test_catalog_lists_core_scanners(monkeypatch):
     pdl = next(s for s in r.json()["scanners"] if s["id"] == "pdl")
     assert pdl["optional_key"] == "PDL_API_KEY"
     assert pdl["available"] is False
+    whitepages = next(s for s in r.json()["scanners"] if s["id"] == "whitepages")
+    assert whitepages["name"] == "Whitepages Pro"
+    assert whitepages["optional_key"] == "WHITEPAGES_API_KEY"
+    assert whitepages["available"] is False
+    assert "phone" in whitepages["accepts"]
 
 
 def test_phone_jobs_do_not_plan_abstract_phone():
@@ -53,6 +60,7 @@ def test_phone_jobs_do_not_plan_abstract_phone():
     assert "dorks" in planned
     assert "twilio" in planned
     assert "numverify" in planned
+    assert "whitepages" in planned
     assert "abstract_phone" not in planned
 
     r = client.post("/api/scans", json={"query": "+1 415 555 2671", "type": "phone"})
@@ -60,6 +68,7 @@ def test_phone_jobs_do_not_plan_abstract_phone():
     assert "abstract_phone" not in r.json()["scanners"]
     assert "phone" in r.json()["scanners"]
     assert "twilio" in r.json()["scanners"]
+    assert "whitepages" in r.json()["scanners"]
     assert "dorks" in r.json()["scanners"]
 
 
@@ -75,4 +84,5 @@ def test_start_scan_and_poll():
     assert "spiderfoot" in r.json()["scanners"]
     assert "maigret" in r.json()["scanners"]
     assert "pdl" in r.json()["scanners"]
+    assert "whitepages" in r.json()["scanners"]
     assert "abstract_phone" not in r.json()["scanners"]

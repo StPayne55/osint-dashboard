@@ -20,6 +20,7 @@ cp .env.example .env
 # NUMVERIFY_API_KEY=...
 # TWILIO_ACCOUNT_SID=...  TWILIO_AUTH_TOKEN=...   # optional US CNAM
 # PDL_API_KEY=...                                 # optional People Data Labs enrichment
+# WHITEPAGES_API_KEY=...                          # optional Whitepages Pro reverse phone
 docker compose up --build
 ```
 
@@ -68,6 +69,7 @@ cd ../spiderfoot-runner && PYTHONPATH=. pytest
 | People Data Labs | optional API (`GET https://api.peopledatalabs.com/v5/person/enrich`) | email | Public-safe name, job title, employer, city/region, LinkedIn and other profile URLs when PDL returns them | Skipped without `PDL_API_KEY`. v1 is email-only. No emails, phones, birth dates, or street addresses are stored or shown. Missing fields stay empty |
 | Numverify | optional API | phone | Carrier/line JSON | Skipped without `NUMVERIFY_API_KEY` |
 | Twilio Lookup | optional API | phone | US CNAM caller name + line-type intelligence | Skipped without `TWILIO_ACCOUNT_SID` + `TWILIO_AUTH_TOKEN`. Empty CNAM means no caller name on file (common for mobiles), never invented |
+| Whitepages Pro | optional API (`GET https://api.whitepages.com/v2/person?phone=`) | phone | Owner / belonging name(s), current or historical street addresses, email if present, brief line type and other returned public fields | Skipped without `WHITEPAGES_API_KEY`. Auth is the documented `X-Api-Key` header. Official Person Search API — not a whitepages.com scrape. Missing fields stay empty. No breach data |
 
 The in-app **Catalog** page repeats this list from the live backend (`GET /api/catalog`). AbstractAPI phone validation is implemented but **not registered** (disabled pending a key) so it does not appear in Catalog or live scan modules.
 
@@ -137,7 +139,7 @@ A single small instance cannot run Holehe, Socialscan, Sherlock, Maigret, and Sp
 | `SPIDERFOOT_MAX_THREADS` | `8` on the runner | `sf.py -max-threads`; override if the Starter box is tight |
 | `SHERLOCK_FULL` | unset | Sherlock stays on the high-signal subset unless you set `1` |
 
-Lightweight modules (username candidates, MX, Gravatar, dorks, Twilio, HIBP, PDL, …) still run in parallel. A heavy scanner stays **queued** on the module rail until it acquires the slot, then flips to **running**. Holehe and SpiderFoot keep any profile hits they already collected if the wall clock fires.
+Lightweight modules (username candidates, MX, Gravatar, dorks, Twilio, HIBP, PDL, Whitepages Pro, …) still run in parallel. A heavy scanner stays **queued** on the module rail until it acquires the slot, then flips to **running**. Holehe and SpiderFoot keep any profile hits they already collected if the wall clock fires.
 
 ## Architecture
 

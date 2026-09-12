@@ -10,7 +10,7 @@ import {
   type ScanEvent,
 } from "../lib/api";
 
-const PHONE_SCANNER_IDS = ["phone", "numverify", "twilio"] as const;
+const PHONE_SCANNER_IDS = ["phone", "numverify", "twilio", "whitepages"] as const;
 
 const SECTIONS: { id: string; title: string; kinds: Finding["kind"][]; scanners?: string[] }[] = [
   { id: "identity", title: "Identity summary", kinds: [] },
@@ -29,7 +29,7 @@ const SECTIONS: { id: string; title: string; kinds: Finding["kind"][]; scanners?
 ];
 
 const PHONE_SECTION_BLURB =
-  "Free scanners give carrier, region, line type, and site registration. A subscriber name needs a CNAM API key (Twilio Lookup) or the manual reverse-lookup links in Search links. No caller name on file means CNAM was empty (common for mobile numbers) — not an error.";
+  "Free scanners give carrier, region, line type, and site registration. A subscriber name needs Twilio CNAM or optional Whitepages Pro (WHITEPAGES_API_KEY). Missing name/address fields stay empty — never invented. Manual reverse-lookup links are in Search links. No caller name on file means CNAM was empty (common for mobile numbers) — not an error.";
 
 const DORKS_SECTION_BLURB =
   "LinkedIn rows sit at the top for name, email, and username lookups. They open a Google profile dork or LinkedIn people search in your browser (login may be required). This desk never scrapes LinkedIn.";
@@ -215,12 +215,18 @@ export function ReportPage() {
         </div>
       </div>
 
-      {(phoneMeta.callerName || phoneMeta.carrier || phoneMeta.region || phoneMeta.lineType) && (
+      {(phoneMeta.callerName || phoneMeta.ownerName || phoneMeta.carrier || phoneMeta.region || phoneMeta.lineType) && (
         <div className="identity phone-meta">
           {phoneMeta.callerName && (
             <div className="stat">
               <b>{phoneMeta.callerName}</b>
               <span>Caller name (CNAM)</span>
+            </div>
+          )}
+          {phoneMeta.ownerName && phoneMeta.ownerName !== phoneMeta.callerName && (
+            <div className="stat">
+              <b>{phoneMeta.ownerName}</b>
+              <span>Owner name · Whitepages</span>
             </div>
           )}
           {phoneMeta.carrier && (
@@ -317,6 +323,7 @@ export function ReportPage() {
                         <div className="title">
                           {f.title}
                           {f.extra?.source === "pdl" ? <span className="meta"> · PDL</span> : null}
+                          {f.extra?.source === "whitepages" ? <span className="meta"> · Whitepages</span> : null}
                         </div>
                         <div className="value">
                           {findingHref(f) ? (
@@ -380,6 +387,7 @@ function derivePhoneMeta(
   let region = identity?.phone_region || "";
   let lineType = identity?.phone_line_type || "";
   let callerName = identity?.caller_name || "";
+  let ownerName = "";
   for (const id of PHONE_SCANNER_IDS) {
     for (const f of findings[id] || []) {
       const title = (f.title || "").trim().toLowerCase();
@@ -396,12 +404,15 @@ function derivePhoneMeta(
       if (!callerName && f.kind === "metadata" && (title === "caller name (cnam)" || title === "caller name")) {
         callerName = f.value;
       }
+      if (!ownerName && extra.source === "whitepages" && title === "name" && f.value) {
+        ownerName = f.value;
+      }
       if (!carrier && typeof extra.carrier === "string") carrier = extra.carrier;
       if (!region && typeof extra.region === "string") region = extra.region;
       if (!lineType && typeof extra.line_type === "string") lineType = extra.line_type;
     }
   }
-  return { carrier, region, lineType, callerName };
+  return { carrier, region, lineType, callerName, ownerName };
 }
 
 function uniq(items: Finding[], kind: Finding["kind"]) {
