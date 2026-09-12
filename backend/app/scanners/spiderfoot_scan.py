@@ -12,12 +12,16 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+import httpx
+
 from app.config import (
     SPIDERFOOT_HOME,
     SPIDERFOOT_MAX_THREADS,
     SPIDERFOOT_MODULES,
+    SPIDERFOOT_REMOTE_TIMEOUT,
     SPIDERFOOT_TIMEOUT,
     SPIDERFOOT_USECASE,
+    USER_AGENT,
     env_flag,
 )
 from app.models import Finding, Query, QueryType, ScannerResult
@@ -107,6 +111,25 @@ def sf_python() -> str:
 def spiderfoot_enabled() -> bool:
     """Off unless SPIDERFOOT_ENABLED is an explicit truthy value. Missing = off."""
     return env_flag("SPIDERFOOT_ENABLED", default=False)
+
+
+def spiderfoot_runner_url() -> str:
+    """Base URL for the dedicated runner. Accepts host:port from Render fromService."""
+    raw = os.getenv("SPIDERFOOT_URL", "").strip()
+    if not raw:
+        return ""
+    if "://" not in raw:
+        raw = f"http://{raw}"
+    return raw.rstrip("/")
+
+
+def spiderfoot_runner_token() -> str:
+    return os.getenv("SPIDERFOOT_RUNNER_TOKEN", "").strip()
+
+
+def remote_configured() -> bool:
+    """Remote mode is on when both URL and bearer token are set (ENABLED not required)."""
+    return bool(spiderfoot_runner_url() and spiderfoot_runner_token())
 
 
 def derive_target(query: Query) -> str | None:
@@ -315,29 +338,46 @@ class SpiderFootScanner(Scanner):
     name = "SpiderFoot"
     tool = "spiderfoot (OSS)"
     description = (
-        "Open-source SpiderFoot CLI (not SpiderFoot HX). Runs a short, "
-        "account/social-focused module set and turns concrete profile URLs "
-        "into report hits."
+        "Open-source SpiderFoot CLI (not SpiderFoot HX). Prefers the dedicated "
+        "spiderfoot-runner HTTP API when SPIDERFOOT_URL is set; otherwise a "
+        "local sf.py fallback. Account/social modules only."
     )
     accepts = [QueryType.username, QueryType.email, QueryType.name, QueryType.phone]
     limitations = (
-        "Bundled scans use a small social/account module allowlist and a hard "
-        "timeout (default 75s) so Render stays responsive. Disabled by default "
-        "on small hosts — set SPIDERFOOT_ENABLED=1 on a larger box. Breach, "
-        "dump, and dark-web modules are not enabled. Common dictionary "
-        "usernames are skipped by Account Finder. Missing binary or disabled "
-        "flag → unavailable, not a crash."
+        "Set SPIDERFOOT_URL + SPIDERFOOT_RUNNER_TOKEN to call the Starter "
+        "private runner (local SPIDERFOOT_ENABLED is not required). Local "
+        "in-process CLI stays off unless SPIDERFOOT_ENABLED=1 and sf.py is "
+        "installed. Social/account allowlist only; breach/dark-web modules "
+        "are not enabled. Deep/full-module scans are a future optional. "
+        "Missing runner or binary → unavailable, not a crash."
     )
-    timeout = SPIDERFOOT_TIMEOUT
     heavy = True
 
+    @property
+    def timeout(self) -> float:  # type: ignore[override]
+        # jobs.py asyncio.wait_for() uses this. Remote HTTP waits wall+30,
+        # so the job gate needs extra slack to receive a structured timeout.
+        wall = self._wall_timeout()
+        if remote_configured():
+            return wall + 45.0
+        return wall
+
     def available(self) -> bool:
+        if remote_configured():
+            return True
         return spiderfoot_enabled() and sf_script_path() is not None
 
     def applicable(self, query: Query) -> bool:
         return bool(derive_target(query))
 
     async def run(self, query: Query) -> ScannerResult:
+        target = derive_target(query)
+        if not target:
+            return self._result("skipped", "No username, email, name, or phone target")
+
+        if remote_configured():
+            return await self._run_remote(target)
+
         if not spiderfoot_enabled():
             return self._result(
                 "unavailable",
@@ -351,9 +391,6 @@ class SpiderFootScanner(Scanner):
                 "SpiderFoot OSS is not installed in this environment",
                 error=f"sf.py not found under {sf_home()}",
             )
-        target = derive_target(query)
-        if not target:
-            return self._result("skipped", "No username, email, name, or phone target")
 
         try:
             # Popen.communicate() is blocking; never run it on the asyncio loop
@@ -362,7 +399,41 @@ class SpiderFootScanner(Scanner):
         except Exception as exc:
             return self._result("error", "SpiderFoot failed", error=str(exc))
 
-        events = parse_spiderfoot_stdout(stdout)
+        return self._finish(
+            target,
+            parse_spiderfoot_stdout(stdout),
+            status,
+            error,
+            mode="local",
+        )
+
+    def _wall_timeout(self) -> float:
+        raw = os.getenv("SPIDERFOOT_TIMEOUT")
+        if raw:
+            try:
+                return max(10.0, float(raw))
+            except ValueError:
+                pass
+        if remote_configured():
+            return max(10.0, float(os.getenv("SPIDERFOOT_REMOTE_TIMEOUT", str(SPIDERFOOT_REMOTE_TIMEOUT))))
+        return float(SPIDERFOOT_TIMEOUT)
+
+    def _cli_timeout(self) -> float:
+        return max(10.0, self._wall_timeout() - 5.0)
+
+    def _remote_scan_timeout(self) -> int:
+        return max(10, int(self._wall_timeout()))
+
+    def _finish(
+        self,
+        target: str,
+        events: list[dict[str, Any]],
+        status: str,
+        error: str | None,
+        *,
+        mode: str,
+        stdout_excerpt: str = "",
+    ) -> ScannerResult:
         findings = events_to_findings(events)
         profiles = sum(1 for f in findings if f.kind == "profile")
         raw = {
@@ -371,11 +442,12 @@ class SpiderFootScanner(Scanner):
             "modules": selected_modules() or list(DEFAULT_MODULES),
             "usecase": selected_usecase(),
             "partial": status == "timeout",
+            "mode": mode,
+            "stdout_excerpt": stdout_excerpt,
         }
-
         if status == "timeout":
             summary = (
-                f"Timed out after {int(self._cli_timeout())}s"
+                f"Timed out after {int(self._wall_timeout())}s"
                 + (f" · {profiles} profile(s) so far" if profiles else "")
             )
             return self._result(
@@ -388,12 +460,11 @@ class SpiderFootScanner(Scanner):
         if status == "error":
             return self._result(
                 "error",
-                "SpiderFoot CLI failed",
+                "SpiderFoot runner failed" if mode == "remote" else "SpiderFoot CLI failed",
                 findings=findings,
                 raw=raw,
                 error=error,
             )
-
         summary = (
             f"{profiles} profile URL(s) via SpiderFoot for {target}"
             if profiles
@@ -401,9 +472,59 @@ class SpiderFootScanner(Scanner):
         )
         return self._result("success", summary, findings=findings, raw=raw)
 
-    def _cli_timeout(self) -> float:
-        wall = float(os.getenv("SPIDERFOOT_TIMEOUT", str(self.timeout)))
-        return max(10.0, wall - 5.0)
+    async def _run_remote(self, target: str) -> ScannerResult:
+        url = f"{spiderfoot_runner_url()}/v1/scan"
+        scan_timeout = self._remote_scan_timeout()
+        payload = {
+            "target": target,
+            "modules": selected_modules() or list(DEFAULT_MODULES),
+            "timeout": scan_timeout,
+        }
+        headers = {
+            "Authorization": f"Bearer {spiderfoot_runner_token()}",
+            "User-Agent": USER_AGENT,
+        }
+        # HTTP wait is longer than the runner's own wall clock so we receive
+        # a structured timeout payload instead of a dropped connection.
+        http_timeout = scan_timeout + 30.0
+        try:
+            async with httpx.AsyncClient(timeout=http_timeout, headers=headers) as client:
+                resp = await client.post(url, json=payload)
+        except httpx.TimeoutException:
+            return self._finish(target, [], "timeout", f"timeout after {int(http_timeout)}s", mode="remote")
+        except Exception as exc:
+            return self._result("error", "SpiderFoot runner unreachable", error=str(exc)[:500])
+        if resp.status_code == 401:
+            return self._result("error", "SpiderFoot runner rejected the token", error="401 unauthorized")
+        if resp.status_code != 200:
+            return self._result(
+                "error",
+                f"SpiderFoot runner HTTP {resp.status_code}",
+                error=(resp.text or "")[:300],
+            )
+        try:
+            body = resp.json()
+        except Exception as exc:
+            return self._result("error", "SpiderFoot runner returned invalid JSON", error=str(exc)[:300])
+        if not isinstance(body, dict):
+            return self._result("error", "SpiderFoot runner returned invalid JSON", error="not an object")
+        events = body.get("events")
+        if not isinstance(events, list):
+            events = []
+        events = [row for row in events if isinstance(row, dict)]
+        status = str(body.get("status") or "error")
+        if status not in {"ok", "timeout", "error"}:
+            status = "error"
+        error = body.get("error")
+        excerpt = str(body.get("stdout_excerpt") or "")
+        return self._finish(
+            str(body.get("target") or target),
+            events,
+            status,
+            str(error) if error else None,
+            mode="remote",
+            stdout_excerpt=excerpt[:2000],
+        )
 
     def _build_command(self, target: str, script: Path) -> list[str]:
         cmd = [

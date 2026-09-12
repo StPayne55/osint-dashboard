@@ -1,0 +1,55 @@
+# OSINT Desk + optional SpiderFoot Starter runner.
+# Free web stays up without the runner (scanner reports unavailable).
+# The runner is a private service (~$7/mo Starter) so sf.py never runs in the
+# free web process. If Blueprint pserv+docker is rejected in the Dashboard,
+# create the same image as a Starter web service and keep bearer-token auth
+# (do not publish /docs — this Blueprint already disables them).
+envVarGroups:
+  - name: spiderfoot-shared
+    envVars:
+      - key: SPIDERFOOT_RUNNER_TOKEN
+        generateValue: true
+
+services:
+  - type: web
+    name: osint-dashboard
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    autoDeployTrigger: commit
+    envVars:
+      - fromGroup: spiderfoot-shared
+      # fromService hostport is "spiderfoot-runner:10000". Desk prepends http://.
+      - key: SPIDERFOOT_URL
+        fromService:
+          name: spiderfoot-runner
+          type: pserv
+          property: hostport
+      # Local in-process CLI stays off on the free web box.
+      # Remote mode is enabled by SPIDERFOOT_URL + SPIDERFOOT_RUNNER_TOKEN above.
+      - key: SPIDERFOOT_ENABLED
+        value: "0"
+      - key: SPIDERFOOT_TIMEOUT
+        value: "180"
+      - key: HEAVY_SCANNER_CONCURRENCY
+        value: "1"
+
+  - type: pserv
+    name: spiderfoot-runner
+    runtime: docker
+    plan: starter
+    region: oregon
+    dockerfilePath: ./spiderfoot-runner/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    maxShutdownDelaySeconds: 120
+    envVars:
+      - fromGroup: spiderfoot-shared
+      - key: SPIDERFOOT_HOME
+        value: /opt/spiderfoot
+      - key: SPIDERFOOT_MAX_THREADS
+        value: "2"

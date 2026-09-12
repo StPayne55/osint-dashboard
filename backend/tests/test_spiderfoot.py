@@ -4,6 +4,7 @@ import threading
 import time
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.detect import build_query
@@ -13,8 +14,15 @@ from app.scanners.spiderfoot_scan import (
     derive_target,
     events_to_findings,
     parse_spiderfoot_stdout,
+    remote_configured,
     sf_script_path,
 )
+
+
+@pytest.fixture(autouse=True)
+def _clear_runner_env(monkeypatch):
+    monkeypatch.delenv("SPIDERFOOT_URL", raising=False)
+    monkeypatch.delenv("SPIDERFOOT_RUNNER_TOKEN", raising=False)
 
 SAMPLE_JSON = """[
 {"type": "Account on External Site", "data": "GitHub (Category: coding)\\n<SFURL>https://github.com/torvalds</SFURL>", "module": "sfp_accounts", "source": "torvalds"},
@@ -347,3 +355,177 @@ def test_get_scan_returns_while_spiderfoot_cli_blocks(monkeypatch, tmp_path):
     assert elapsed < 1.0
 
     release.set()
+
+
+def _remote_payload(status: str = "ok", events=None, error=None):
+    return {
+        "status": status,
+        "target": "torvalds",
+        "events": events
+        if events is not None
+        else [
+            {
+                "type": "Account on External Site",
+                "data": "GitHub (Category: coding)\n<SFURL>https://github.com/torvalds</SFURL>",
+                "module": "sfp_accounts",
+            }
+        ],
+        "stdout_excerpt": "[]",
+        "error": error,
+    }
+
+
+def _fake_async_client(handler):
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            self.kwargs = kwargs
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def post(self, url, json=None, headers=None):
+            return await handler(url, json, headers, self.kwargs)
+
+    return FakeClient
+
+
+def test_available_when_remote_url_and_token(monkeypatch, tmp_path):
+    monkeypatch.setenv("SPIDERFOOT_HOME", str(tmp_path / "missing"))
+    monkeypatch.setenv("SPIDERFOOT_ENABLED", "0")
+    monkeypatch.setenv("SPIDERFOOT_URL", "http://spiderfoot-runner:10000")
+    monkeypatch.setenv("SPIDERFOOT_RUNNER_TOKEN", "shared-secret")
+    assert remote_configured() is True
+    assert SpiderFootScanner().available() is True
+
+
+def test_unavailable_when_remote_url_without_token(monkeypatch, tmp_path):
+    monkeypatch.setenv("SPIDERFOOT_HOME", str(tmp_path / "missing"))
+    monkeypatch.setenv("SPIDERFOOT_URL", "http://spiderfoot-runner:10000")
+    assert remote_configured() is False
+    assert SpiderFootScanner().available() is False
+
+
+def test_remote_run_uses_httpx(monkeypatch):
+    monkeypatch.setenv("SPIDERFOOT_URL", "spiderfoot-runner:10000")
+    monkeypatch.setenv("SPIDERFOOT_RUNNER_TOKEN", "shared-secret")
+    monkeypatch.setenv("SPIDERFOOT_ENABLED", "0")
+    seen: dict = {}
+
+    class Resp:
+        status_code = 200
+
+        def json(self):
+            return _remote_payload()
+
+    async def handler(url, json, headers, kwargs):
+        seen["url"] = url
+        seen["json"] = json
+        seen["headers"] = headers
+        return Resp()
+
+    monkeypatch.setattr(
+        "app.scanners.spiderfoot_scan.httpx.AsyncClient",
+        _fake_async_client(handler),
+    )
+    scanner = SpiderFootScanner()
+    called = {"cli": False}
+
+    def boom(*_a, **_k):
+        called["cli"] = True
+        raise AssertionError("local CLI must not run when remote URL is set")
+
+    monkeypatch.setattr(scanner, "_run_cli", boom)
+    result = asyncio.run(scanner.run(build_query("torvalds")))
+    assert called["cli"] is False
+    assert result.status.status == "success"
+    assert seen["url"] == "http://spiderfoot-runner:10000/v1/scan"
+    assert seen["headers"]["Authorization"] == "Bearer shared-secret"
+    assert seen["json"]["target"] == "torvalds"
+    assert "sfp_accounts" in seen["json"]["modules"]
+    assert any(f.url == "https://github.com/torvalds" for f in result.findings)
+    assert result.raw["mode"] == "remote"
+
+
+def test_remote_timeout_and_error(monkeypatch):
+    monkeypatch.setenv("SPIDERFOOT_URL", "http://sf.internal:10000")
+    monkeypatch.setenv("SPIDERFOOT_RUNNER_TOKEN", "shared-secret")
+
+    class TimeoutResp:
+        status_code = 200
+
+        def json(self):
+            return _remote_payload(status="timeout", error="timeout after 180s")
+
+    async def timeout_handler(*_a):
+        return TimeoutResp()
+
+    monkeypatch.setattr(
+        "app.scanners.spiderfoot_scan.httpx.AsyncClient",
+        _fake_async_client(timeout_handler),
+    )
+    result = asyncio.run(SpiderFootScanner().run(build_query("torvalds")))
+    assert result.status.status == "timeout"
+    assert any(f.kind == "profile" for f in result.findings)
+
+    class ErrResp:
+        status_code = 200
+
+        def json(self):
+            return _remote_payload(status="error", events=[], error="sf.py crashed")
+
+    async def error_handler(*_a):
+        return ErrResp()
+
+    monkeypatch.setattr(
+        "app.scanners.spiderfoot_scan.httpx.AsyncClient",
+        _fake_async_client(error_handler),
+    )
+    result = asyncio.run(SpiderFootScanner().run(build_query("torvalds")))
+    assert result.status.status == "error"
+    assert "crashed" in (result.status.error or "")
+
+
+def test_remote_401_and_connect_error(monkeypatch):
+    monkeypatch.setenv("SPIDERFOOT_URL", "http://sf.internal:10000")
+    monkeypatch.setenv("SPIDERFOOT_RUNNER_TOKEN", "shared-secret")
+
+    class Unauthorized:
+        status_code = 401
+        text = "nope"
+
+        def json(self):
+            return {"detail": "invalid token"}
+
+    async def handler(*_a):
+        return Unauthorized()
+
+    monkeypatch.setattr(
+        "app.scanners.spiderfoot_scan.httpx.AsyncClient",
+        _fake_async_client(handler),
+    )
+    result = asyncio.run(SpiderFootScanner().run(build_query("torvalds")))
+    assert result.status.status == "error"
+    assert "401" in (result.status.error or "")
+
+    async def boom(*_a, **_k):
+        raise ConnectionError("connection refused")
+
+    class BoomClient:
+        def __init__(self, *a, **k):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        post = boom
+
+    monkeypatch.setattr("app.scanners.spiderfoot_scan.httpx.AsyncClient", BoomClient)
+    result = asyncio.run(SpiderFootScanner().run(build_query("torvalds")))
+    assert result.status.status == "error"
+    assert "unreachable" in result.status.summary.lower()

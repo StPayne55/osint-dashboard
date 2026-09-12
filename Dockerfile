@@ -18,9 +18,10 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 COPY backend/requirements.txt /app/backend/requirements.txt
 RUN pip install --no-cache-dir -r /app/backend/requirements.txt
-# SpiderFoot OSS (not HX) lives in its own venv so Flask/CherryPy pins
-# cannot collide with FastAPI. Costs ~200–400MB; pass
-# --build-arg INSTALL_SPIDERFOOT=0 to skip.
+# Optional local SpiderFoot OSS (not HX) lives in its own venv so
+# Flask/CherryPy pins cannot collide with FastAPI. Costs ~200–400MB; pass
+# --build-arg INSTALL_SPIDERFOOT=0 to skip. On Render, prefer the separate
+# spiderfoot-runner service instead of invoking sf.py in this web process.
 COPY docker/spiderfoot-requirements.txt docker/patch_spiderfoot.py docker/install_spiderfoot.sh /tmp/sf-install/
 RUN if [ "$INSTALL_SPIDERFOOT" = "1" ]; then \
       apt-get update \
