@@ -78,6 +78,7 @@ class SherlockScanner(Scanner):
         "subset; set SHERLOCK_FULL=1 for the complete list."
     )
     timeout = SHERLOCK_TIMEOUT
+    heavy = True
 
     def available(self) -> bool:
         try:

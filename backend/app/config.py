@@ -9,6 +9,17 @@ APP_VERSION = "1.0.0"
 API_HOST = os.getenv("OSINT_HOST", "0.0.0.0")
 API_PORT = int(os.getenv("OSINT_PORT", "8742"))
 
+
+def _int_env(name: str, default: int, minimum: int = 1) -> int:
+    raw = (os.getenv(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        return max(minimum, int(raw))
+    except ValueError:
+        return default
+
+
 # Per-scanner wall clocks. One hung tool must not block the report.
 DEFAULT_TIMEOUT = float(os.getenv("SCANNER_TIMEOUT", "45"))
 HOLEHE_TIMEOUT = float(os.getenv("HOLEHE_TIMEOUT", "75"))
@@ -16,8 +27,12 @@ SHERLOCK_TIMEOUT = float(os.getenv("SHERLOCK_TIMEOUT", "90"))
 SOCIALSCAN_TIMEOUT = float(os.getenv("SOCIALSCAN_TIMEOUT", "40"))
 HARVESTER_TIMEOUT = float(os.getenv("HARVESTER_TIMEOUT", "45"))
 PHONE_TIMEOUT = float(os.getenv("PHONE_TIMEOUT", "30"))
+# Shared slot for Holehe / Socialscan / Sherlock / Maigret / SpiderFoot so a
+# single small host (Render free) is not starved by five parallel site crawls.
+# Lightweight modules (Gravatar, MX, dorks, Twilio, …) stay ungated.
+HEAVY_SCANNER_CONCURRENCY = _int_env("HEAVY_SCANNER_CONCURRENCY", 1)
 # SpiderFoot OSS is slow; keep a hard wall clock so one scan cannot stall Render.
-SPIDERFOOT_TIMEOUT = float(os.getenv("SPIDERFOOT_TIMEOUT", "120"))
+SPIDERFOOT_TIMEOUT = float(os.getenv("SPIDERFOOT_TIMEOUT", "75"))
 SPIDERFOOT_ENABLED = os.getenv("SPIDERFOOT_ENABLED", "1").strip().lower() not in {
     "0",
     "false",
@@ -38,7 +53,8 @@ SHERLOCK_SITE_TIMEOUT = float(os.getenv("SHERLOCK_SITE_TIMEOUT", "8"))
 # Maigret default is top-500; keep a smaller slice so Render stays responsive.
 MAIGRET_TIMEOUT = float(os.getenv("MAIGRET_TIMEOUT", "100"))
 MAIGRET_SITE_TIMEOUT = float(os.getenv("MAIGRET_SITE_TIMEOUT", "8"))
-MAIGRET_TOP_SITES = int(os.getenv("MAIGRET_TOP_SITES", "200"))
+MAIGRET_TOP_SITES = _int_env("MAIGRET_TOP_SITES", 50, minimum=1)
+MAIGRET_MAX_CONNECTIONS = _int_env("MAIGRET_MAX_CONNECTIONS", 10)
 MAIGRET_FULL = os.getenv("MAIGRET_FULL", "").lower() in {"1", "true", "yes"}
 MAIGRET_NSFW = os.getenv("MAIGRET_NSFW", "").lower() in {"1", "true", "yes"}
 MAIGRET_PARSE = os.getenv("MAIGRET_PARSE", "1").strip().lower() not in {

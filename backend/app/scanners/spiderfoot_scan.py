@@ -324,11 +324,12 @@ class SpiderFootScanner(Scanner):
     accepts = [QueryType.username, QueryType.email, QueryType.name, QueryType.phone]
     limitations = (
         "Bundled scans use a small social/account module allowlist and a hard "
-        "timeout (default 120s) so Render stays responsive. Breach, dump, and "
+        "timeout (default 75s) so Render stays responsive. Breach, dump, and "
         "dark-web modules are not enabled. Common dictionary usernames are "
         "skipped by Account Finder. Missing binary → unavailable, not a crash."
     )
     timeout = SPIDERFOOT_TIMEOUT
+    heavy = True
 
     def available(self) -> bool:
         return spiderfoot_enabled() and sf_script_path() is not None

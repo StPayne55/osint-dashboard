@@ -280,6 +280,11 @@ def test_event_loop_stays_responsive_while_cli_blocks(monkeypatch, tmp_path):
 
 def test_get_scan_returns_while_spiderfoot_cli_blocks(monkeypatch, tmp_path):
     """Regression: GET /api/scans/{id} must not wait on Popen.communicate()."""
+    from app.jobs import reset_heavy_gate
+
+    # This test is about the event loop, not the heavy-scanner gate. Other
+    # social crawlers must not hold the single default slot.
+    reset_heavy_gate(16)
     _install_fake_sf(monkeypatch, tmp_path)
     started = threading.Event()
     release = threading.Event()
