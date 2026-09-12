@@ -74,7 +74,7 @@ The Docker image clones SpiderFoot **v4.0** from [smicallef/spiderfoot](https://
 
 **Size tradeoff:** the isolated venv and 200+ modules add roughly **200–400 MB** to the image. Worth it for account/social URL coverage that Sherlock/Holehe/Socialscan miss. Skip the bundle with `docker build --build-arg INSTALL_SPIDERFOOT=0 .` (the scanner then reports `unavailable`).
 
-Scans run **in-process via the CLI** (`sf.py -s … -o json -q`) inside the same Render web service — no SpiderFoot sidecar or extra port. A hard timeout (`SPIDERFOOT_TIMEOUT`, default 120s) kills the process group so one hung scan cannot stall the job. Default modules are an account/social allowlist (`sfp_accounts`, GitHub, Twitter, Instagram, Gravatar, Keybase, …). Breach, dump, and dark-web modules are stripped from the image and never selected.
+Scans run **in-process via the CLI** (`sf.py -s … -o json -q`) inside the same Render web service — no SpiderFoot sidecar or extra port. The CLI is launched with `asyncio.to_thread` so `Popen.communicate` cannot freeze uvicorn (health, `GET /api/scans/{id}`, and SSE stay responsive). A hard timeout (`SPIDERFOOT_TIMEOUT`, default 120s) kills the process group so one hung scan cannot stall the job. Default modules are an account/social allowlist (`sfp_accounts`, GitHub, Twitter, Instagram, Gravatar, Keybase, …). Breach, dump, and dark-web modules are stripped from the image and never selected.
 
 | Env | Default | Meaning |
 | --- | --- | --- |
@@ -84,6 +84,7 @@ Scans run **in-process via the CLI** (`sf.py -s … -o json -q`) inside the same
 | `SPIDERFOOT_USECASE` | unset | `passive` / `footprint` only if you want a broader set |
 | `SPIDERFOOT_HOME` | `/opt/spiderfoot` | Local checkout for non-Docker dev |
 | `SPIDERFOOT_PYTHON` | `$SPIDERFOOT_HOME/.venv/bin/python` | Interpreter that has SF deps |
+| `SPIDERFOOT_MAX_THREADS` | `2` | `sf.py -max-threads`; keep low on small Render hosts |
 
 Local (no Docker): clone OSS v4.0, create a venv, `pip install -r docker/spiderfoot-requirements.txt`, run `python3 docker/patch_spiderfoot.py /path/to/spiderfoot` so Account Finder can read current WhatsMyName `wmn-data.json`, then set `SPIDERFOOT_HOME`.
 

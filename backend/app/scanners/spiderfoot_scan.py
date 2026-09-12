@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
@@ -354,7 +355,9 @@ class SpiderFootScanner(Scanner):
             return self._result("skipped", "No username, email, name, or phone target")
 
         try:
-            stdout, status, error = self._run_cli(target, script)
+            # Popen.communicate() is blocking; never run it on the asyncio loop
+            # (single-worker uvicorn on Render would freeze health/report/SSE).
+            stdout, status, error = await asyncio.to_thread(self._run_cli, target, script)
         except Exception as exc:
             return self._result("error", "SpiderFoot failed", error=str(exc))
 

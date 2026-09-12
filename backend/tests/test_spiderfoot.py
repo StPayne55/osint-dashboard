@@ -1,6 +1,10 @@
 import asyncio
 import subprocess
+import threading
+import time
 from pathlib import Path
+
+from fastapi.testclient import TestClient
 
 from app.detect import build_query
 from app.scanners import all_scanners
@@ -181,3 +185,130 @@ def test_username_and_email_jobs_plan_spiderfoot():
         planned = [s.id for s in all_scanners() if s.applicable(query) or s.optional_key]
         assert "spiderfoot" in planned, raw
         assert expected
+
+
+def _install_fake_sf(monkeypatch, tmp_path) -> Path:
+    home = tmp_path / "sf"
+    home.mkdir()
+    (home / "sf.py").write_text("# fake\n", encoding="utf-8")
+    monkeypatch.setenv("SPIDERFOOT_HOME", str(home))
+    monkeypatch.setenv("SPIDERFOOT_ENABLED", "1")
+    return home
+
+
+def test_run_dispatches_cli_via_to_thread(monkeypatch, tmp_path):
+    home = _install_fake_sf(monkeypatch, tmp_path)
+    scanner = SpiderFootScanner()
+    seen: dict = {}
+
+    async def fake_to_thread(fn, *args, **kwargs):
+        seen["fn"] = fn
+        seen["args"] = args
+        return SAMPLE_JSON, "ok", None
+
+    monkeypatch.setattr("app.scanners.spiderfoot_scan.asyncio.to_thread", fake_to_thread)
+    result = asyncio.run(scanner.run(build_query("torvalds")))
+    assert seen["fn"] == scanner._run_cli
+    assert seen["args"] == ("torvalds", home / "sf.py")
+    assert result.status.status == "success"
+    assert any(f.url == "https://github.com/torvalds" for f in result.findings)
+
+
+def test_communicate_does_not_run_on_event_loop(monkeypatch, tmp_path):
+    _install_fake_sf(monkeypatch, tmp_path)
+    scanner = SpiderFootScanner()
+    communicate_threads: list[int] = []
+    loop_thread = {"id": 0}
+
+    class Proc:
+        pid = 4242
+        returncode = 0
+
+        def communicate(self, timeout=None):
+            communicate_threads.append(threading.get_ident())
+            return SAMPLE_JSON, ""
+
+        def poll(self):
+            return 0
+
+    monkeypatch.setattr(
+        "app.scanners.spiderfoot_scan.subprocess.Popen",
+        lambda *_a, **_k: Proc(),
+    )
+
+    async def go():
+        loop_thread["id"] = threading.get_ident()
+        return await scanner.run(build_query("torvalds"))
+
+    result = asyncio.run(go())
+    assert result.status.status == "success"
+    assert communicate_threads
+    assert all(tid != loop_thread["id"] for tid in communicate_threads)
+
+
+def test_event_loop_stays_responsive_while_cli_blocks(monkeypatch, tmp_path):
+    _install_fake_sf(monkeypatch, tmp_path)
+    scanner = SpiderFootScanner()
+    started = threading.Event()
+
+    def fake_cli(target: str, script: Path):
+        started.set()
+        time.sleep(0.25)
+        return SAMPLE_JSON, "ok", None
+
+    monkeypatch.setattr(scanner, "_run_cli", fake_cli)
+
+    async def probe():
+        task = asyncio.create_task(scanner.run(build_query("torvalds")))
+        for _ in range(50):
+            if started.is_set():
+                break
+            await asyncio.sleep(0.01)
+        assert started.is_set()
+        ticks = 0
+        deadline = time.monotonic() + 0.15
+        while time.monotonic() < deadline:
+            await asyncio.sleep(0.01)
+            ticks += 1
+        result = await task
+        return result, ticks
+
+    result, ticks = asyncio.run(probe())
+    assert ticks >= 5
+    assert result.status.status == "success"
+
+
+def test_get_scan_returns_while_spiderfoot_cli_blocks(monkeypatch, tmp_path):
+    """Regression: GET /api/scans/{id} must not wait on Popen.communicate()."""
+    _install_fake_sf(monkeypatch, tmp_path)
+    started = threading.Event()
+    release = threading.Event()
+
+    def fake_cli(self, target: str, script: Path):
+        started.set()
+        release.wait(timeout=5)
+        return SAMPLE_JSON, "ok", None
+
+    monkeypatch.setattr(SpiderFootScanner, "_run_cli", fake_cli)
+    from app.main import app
+
+    client = TestClient(app)
+    posted = client.post("/api/scans", json={"query": "torvalds", "type": "username"})
+    assert posted.status_code == 200
+    job_id = posted.json()["job_id"]
+    assert started.wait(timeout=2)
+
+    t0 = time.monotonic()
+    health = client.get("/api/health")
+    report = client.get(f"/api/scans/{job_id}")
+    elapsed = time.monotonic() - t0
+    assert health.status_code == 200
+    assert health.json()["ok"] is True
+    assert report.status_code == 200
+    body = report.json()
+    assert body["status"] in {"queued", "running"}
+    spider = next(m for m in body["modules"] if m["id"] == "spiderfoot")
+    assert spider["status"] in {"queued", "running"}
+    assert elapsed < 1.0
+
+    release.set()

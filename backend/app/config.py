@@ -27,7 +27,8 @@ SPIDERFOOT_ENABLED = os.getenv("SPIDERFOOT_ENABLED", "1").strip().lower() not in
 SPIDERFOOT_HOME = os.getenv("SPIDERFOOT_HOME", "/opt/spiderfoot").strip() or "/opt/spiderfoot"
 SPIDERFOOT_USECASE = os.getenv("SPIDERFOOT_USECASE", "").strip().lower()
 SPIDERFOOT_MODULES = os.getenv("SPIDERFOOT_MODULES", "").strip()
-SPIDERFOOT_MAX_THREADS = int(os.getenv("SPIDERFOOT_MAX_THREADS", "3"))
+# Keep this low on small hosts (Render free): SF uses multiprocessing.
+SPIDERFOOT_MAX_THREADS = int(os.getenv("SPIDERFOOT_MAX_THREADS", "2"))
 
 # Sherlock checks 400+ sites by default; the dashboard uses a high-signal
 # subset unless SHERLOCK_FULL=1.
