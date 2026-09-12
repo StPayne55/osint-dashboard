@@ -14,8 +14,8 @@ from app.scanners.phone_scan import PhoneScanner
 from app.scanners.sherlock_scan import SherlockScanner
 from app.scanners.socialscan_scan import SocialscanScanner
 from app.scanners.spiderfoot_scan import SpiderFootScanner
-from app.scanners.trestle_scan import TrestleReversePhoneScanner
 from app.scanners.twilio_scan import TwilioLookupScanner
+from app.scanners.whitepages_scan import WhitepagesProScanner
 from app.scanners.usernames import UsernameCandidateScanner
 
 # AbstractPhoneScanner stays in abstract_phone_scan.py but is not registered.
@@ -40,5 +40,5 @@ def all_scanners() -> list[Scanner]:
         PdlScanner(),
         NumverifyScanner(),
         TwilioLookupScanner(),
-        TrestleReversePhoneScanner(),
+        WhitepagesProScanner(),
     ]

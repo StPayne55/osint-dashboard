@@ -10,7 +10,7 @@ import {
   type ScanEvent,
 } from "../lib/api";
 
-const PHONE_SCANNER_IDS = ["phone", "numverify", "twilio", "trestle"] as const;
+const PHONE_SCANNER_IDS = ["phone", "numverify", "twilio", "whitepages"] as const;
 
 const SECTIONS: { id: string; title: string; kinds: Finding["kind"][]; scanners?: string[] }[] = [
   { id: "identity", title: "Identity summary", kinds: [] },
@@ -29,7 +29,7 @@ const SECTIONS: { id: string; title: string; kinds: Finding["kind"][]; scanners?
 ];
 
 const PHONE_SECTION_BLURB =
-  "Free scanners give carrier, region, line type, and site registration. A subscriber name needs Twilio CNAM or optional Trestle Reverse Phone (TRESTLE_API_KEY). Missing name/address fields stay empty — never invented. Manual reverse-lookup links are in Search links. No caller name on file means CNAM was empty (common for mobile numbers) — not an error.";
+  "Free scanners give carrier, region, line type, and site registration. A subscriber name needs Twilio CNAM or optional Whitepages Pro (WHITEPAGES_API_KEY). Missing name/address fields stay empty — never invented. Manual reverse-lookup links are in Search links. No caller name on file means CNAM was empty (common for mobile numbers) — not an error.";
 
 const DORKS_SECTION_BLURB =
   "LinkedIn rows sit at the top for name, email, and username lookups. They open a Google profile dork or LinkedIn people search in your browser (login may be required). This desk never scrapes LinkedIn.";
@@ -226,7 +226,7 @@ export function ReportPage() {
           {phoneMeta.ownerName && phoneMeta.ownerName !== phoneMeta.callerName && (
             <div className="stat">
               <b>{phoneMeta.ownerName}</b>
-              <span>Owner name · Trestle</span>
+              <span>Owner name · Whitepages</span>
             </div>
           )}
           {phoneMeta.carrier && (
@@ -323,7 +323,7 @@ export function ReportPage() {
                         <div className="title">
                           {f.title}
                           {f.extra?.source === "pdl" ? <span className="meta"> · PDL</span> : null}
-                          {f.extra?.source === "trestle" ? <span className="meta"> · Trestle</span> : null}
+                          {f.extra?.source === "whitepages" ? <span className="meta"> · Whitepages</span> : null}
                         </div>
                         <div className="value">
                           {findingHref(f) ? (
@@ -404,7 +404,7 @@ function derivePhoneMeta(
       if (!callerName && f.kind === "metadata" && (title === "caller name (cnam)" || title === "caller name")) {
         callerName = f.value;
       }
-      if (!ownerName && extra.source === "trestle" && title === "name" && f.value) {
+      if (!ownerName && extra.source === "whitepages" && title === "name" && f.value) {
         ownerName = f.value;
       }
       if (!carrier && typeof extra.carrier === "string") carrier = extra.carrier;
