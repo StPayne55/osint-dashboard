@@ -457,7 +457,11 @@ def test_remote_timeout_and_error(monkeypatch):
         status_code = 200
 
         def json(self):
-            return _remote_payload(status="timeout", error="timeout after 180s")
+            payload = _remote_payload(status="timeout", error="timeout after 180s")
+            payload["stderr_excerpt"] = "scan still running after wall clock"
+            payload["salvaged"] = True
+            payload["scan_id"] = "SCAN1"
+            return payload
 
     async def timeout_handler(*_a):
         return TimeoutResp()
@@ -469,6 +473,9 @@ def test_remote_timeout_and_error(monkeypatch):
     result = asyncio.run(SpiderFootScanner().run(build_query("torvalds")))
     assert result.status.status == "timeout"
     assert any(f.kind == "profile" for f in result.findings)
+    assert result.raw["salvaged"] is True
+    assert result.raw["scan_id"] == "SCAN1"
+    assert "wall clock" in result.raw["stderr_excerpt"]
 
     class ErrResp:
         status_code = 200

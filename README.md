@@ -92,19 +92,19 @@ export SPIDERFOOT_URL=http://spiderfoot-runner:10000
 docker compose --profile runner up --build
 ```
 
-The runner image reuses `docker/install_spiderfoot.sh` + `docker/patch_spiderfoot.py` (Account Finder / WhatsMyName `wmn-data.json`, breach/dark-web modules removed). `GET /health` → `{ok:true, spiderfoot:true}`. Sync scans may take 2–5 minutes on Starter; Desk waits with a generous HTTP timeout. **Deep / full-module scans are a future optional** (v1 stays on the social/account allowlist).
+The runner image reuses `docker/install_spiderfoot.sh` + `docker/patch_spiderfoot.py` (Account Finder / WhatsMyName `wmn-data.json`, breach/dark-web modules removed). `GET /health` → `{ok:true, spiderfoot:true}`. Sync scans may take 2–5 minutes on Starter; Desk waits with a generous HTTP timeout. If the wall clock fires first, the runner aborts the scan and returns any ACCOUNT/SOCIAL events already stored in the temp SQLite DB (`status: timeout` with findings) instead of an empty timeout. **Deep / full-module scans are a future optional** (v1 stays on the social/account allowlist).
 
 | Env | Default | Meaning |
 | --- | --- | --- |
 | `SPIDERFOOT_URL` | unset | Runner base URL (`http://spiderfoot-runner:10000` or `host:port`). Set this to enable remote mode |
 | `SPIDERFOOT_RUNNER_TOKEN` | unset | Shared bearer secret (required with URL) |
 | `SPIDERFOOT_ENABLED` | off (missing = off) | Local in-process `sf.py` only. Not required when URL+token are set |
-| `SPIDERFOOT_TIMEOUT` | `75` local / `180` on Render web | Wall clock sent to the runner / local CLI |
+| `SPIDERFOOT_TIMEOUT` | `75` local / `180` on Render web | Wall clock sent to the runner / local CLI. 120–180s on Starter is enough for partial ACCOUNT/SOCIAL hits; the runner salvages SQLite events on timeout |
 | `SPIDERFOOT_MODULES` | social/account allowlist | Comma-separated override |
 | `SPIDERFOOT_USECASE` | unset | Local CLI only: `passive` / `footprint` |
 | `SPIDERFOOT_HOME` | `/opt/spiderfoot` | Local checkout for non-Docker / in-process fallback |
 | `SPIDERFOOT_PYTHON` | `$SPIDERFOOT_HOME/.venv/bin/python` | Interpreter that has SF deps |
-| `SPIDERFOOT_MAX_THREADS` | `2` | `sf.py -max-threads`; keep low on small hosts |
+| `SPIDERFOOT_MAX_THREADS` | `8` on the runner / `2` local | `sf.py -max-threads`; Starter can run 8; keep 2 on a small local host |
 
 The Desk image can still bundle SF (`docker build --build-arg INSTALL_SPIDERFOOT=0 .` skips it). Local (no Docker): clone OSS v4.0, create a venv, `pip install -r docker/spiderfoot-requirements.txt`, run `python3 docker/patch_spiderfoot.py /path/to/spiderfoot`, then set `SPIDERFOOT_HOME` and `SPIDERFOOT_ENABLED=1`.
 
@@ -122,8 +122,8 @@ A single small instance cannot run Holehe, Socialscan, Sherlock, Maigret, and Sp
 | `MAIGRET_MAX_CONNECTIONS` | `10` | Concurrent Maigret HTTP connections |
 | `SPIDERFOOT_URL` | unset | Enables remote runner (with token). Leave unset on free-only deploys |
 | `SPIDERFOOT_ENABLED` | off | Local in-process CLI only; not needed when URL is set |
-| `SPIDERFOOT_TIMEOUT` | `75` / `180` on Render | SF wall clock; modules stay on the social/account allowlist |
-| `SPIDERFOOT_MAX_THREADS` | `2` | `sf.py -max-threads` on the runner |
+| `SPIDERFOOT_TIMEOUT` | `75` / `180` on Render | SF wall clock (120–180s recommended on Starter; partials are returned) |
+| `SPIDERFOOT_MAX_THREADS` | `8` on the runner | `sf.py -max-threads`; override if the Starter box is tight |
 | `SHERLOCK_FULL` | unset | Sherlock stays on the high-signal subset unless you set `1` |
 
 Lightweight modules (username candidates, MX, Gravatar, dorks, Twilio, HIBP, …) still run in parallel. A heavy scanner stays **queued** on the module rail until it acquires the slot, then flips to **running**. Holehe and SpiderFoot keep any profile hits they already collected if the wall clock fires.

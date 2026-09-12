@@ -2,7 +2,13 @@ import json
 
 from fastapi.testclient import TestClient
 
-from cli import DEFAULT_MODULES, parse_spiderfoot_stdout, sanitize_modules, stdout_excerpt
+from cli import (
+    DEFAULT_MODULES,
+    parse_spiderfoot_stdout,
+    sanitize_modules,
+    stderr_excerpt,
+    stdout_excerpt,
+)
 from main import app
 
 SAMPLE_JSON = """[
@@ -102,6 +108,7 @@ def test_parse_spiderfoot_stdout_and_excerpt():
     assert parse_spiderfoot_stdout(truncated)
     assert stdout_excerpt("abc", limit=10) == "abc"
     assert stdout_excerpt("abcdefghijk", limit=4) == "abcd…"
+    assert stderr_excerpt("scan failed hard", limit=8) == "scan fai…"
 
 
 def test_parse_ignores_non_json():
