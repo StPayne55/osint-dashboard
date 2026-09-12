@@ -16,11 +16,36 @@ SHERLOCK_TIMEOUT = float(os.getenv("SHERLOCK_TIMEOUT", "90"))
 SOCIALSCAN_TIMEOUT = float(os.getenv("SOCIALSCAN_TIMEOUT", "40"))
 HARVESTER_TIMEOUT = float(os.getenv("HARVESTER_TIMEOUT", "45"))
 PHONE_TIMEOUT = float(os.getenv("PHONE_TIMEOUT", "30"))
+# SpiderFoot OSS is slow; keep a hard wall clock so one scan cannot stall Render.
+SPIDERFOOT_TIMEOUT = float(os.getenv("SPIDERFOOT_TIMEOUT", "120"))
+SPIDERFOOT_ENABLED = os.getenv("SPIDERFOOT_ENABLED", "1").strip().lower() not in {
+    "0",
+    "false",
+    "no",
+    "off",
+}
+SPIDERFOOT_HOME = os.getenv("SPIDERFOOT_HOME", "/opt/spiderfoot").strip() or "/opt/spiderfoot"
+SPIDERFOOT_USECASE = os.getenv("SPIDERFOOT_USECASE", "").strip().lower()
+SPIDERFOOT_MODULES = os.getenv("SPIDERFOOT_MODULES", "").strip()
+SPIDERFOOT_MAX_THREADS = int(os.getenv("SPIDERFOOT_MAX_THREADS", "3"))
 
 # Sherlock checks 400+ sites by default; the dashboard uses a high-signal
 # subset unless SHERLOCK_FULL=1.
 SHERLOCK_FULL = os.getenv("SHERLOCK_FULL", "").lower() in {"1", "true", "yes"}
 SHERLOCK_SITE_TIMEOUT = float(os.getenv("SHERLOCK_SITE_TIMEOUT", "8"))
+
+# Maigret default is top-500; keep a smaller slice so Render stays responsive.
+MAIGRET_TIMEOUT = float(os.getenv("MAIGRET_TIMEOUT", "100"))
+MAIGRET_SITE_TIMEOUT = float(os.getenv("MAIGRET_SITE_TIMEOUT", "8"))
+MAIGRET_TOP_SITES = int(os.getenv("MAIGRET_TOP_SITES", "200"))
+MAIGRET_FULL = os.getenv("MAIGRET_FULL", "").lower() in {"1", "true", "yes"}
+MAIGRET_NSFW = os.getenv("MAIGRET_NSFW", "").lower() in {"1", "true", "yes"}
+MAIGRET_PARSE = os.getenv("MAIGRET_PARSE", "1").strip().lower() not in {
+    "0",
+    "false",
+    "no",
+    "off",
+}
 
 # Optional paid/key APIs — skipped when unset.
 HIBP_API_KEY = os.getenv("HIBP_API_KEY", "").strip()
