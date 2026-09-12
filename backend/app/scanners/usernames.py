@@ -10,7 +10,8 @@ class UsernameCandidateScanner(Scanner):
     tool = "built-in"
     description = (
         "Derives likely handles from a name or email local-part "
-        "(firstlast, first.last, flast, …). Used as input hints for Sherlock/socialscan."
+        "(firstlast, first.last, flast, …). Dotted email locals also get a "
+        "no-dot variant early. Sherlock/Maigret/Socialscan try the first few."
     )
     accepts = [QueryType.email, QueryType.name, QueryType.username]
     limitations = "Guesses only. Not evidence the person uses these handles."

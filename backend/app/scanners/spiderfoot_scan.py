@@ -13,12 +13,12 @@ from typing import Any
 from urllib.parse import urlparse
 
 from app.config import (
-    SPIDERFOOT_ENABLED,
     SPIDERFOOT_HOME,
     SPIDERFOOT_MAX_THREADS,
     SPIDERFOOT_MODULES,
     SPIDERFOOT_TIMEOUT,
     SPIDERFOOT_USECASE,
+    env_flag,
 )
 from app.models import Finding, Query, QueryType, ScannerResult
 from app.profile_urls import is_concrete_profile_url
@@ -105,10 +105,8 @@ def sf_python() -> str:
 
 
 def spiderfoot_enabled() -> bool:
-    raw = os.getenv("SPIDERFOOT_ENABLED")
-    if raw is None:
-        return SPIDERFOOT_ENABLED
-    return raw.strip().lower() not in {"0", "false", "no", "off"}
+    """Off unless SPIDERFOOT_ENABLED is an explicit truthy value. Missing = off."""
+    return env_flag("SPIDERFOOT_ENABLED", default=False)
 
 
 def derive_target(query: Query) -> str | None:
@@ -324,9 +322,11 @@ class SpiderFootScanner(Scanner):
     accepts = [QueryType.username, QueryType.email, QueryType.name, QueryType.phone]
     limitations = (
         "Bundled scans use a small social/account module allowlist and a hard "
-        "timeout (default 75s) so Render stays responsive. Breach, dump, and "
-        "dark-web modules are not enabled. Common dictionary usernames are "
-        "skipped by Account Finder. Missing binary → unavailable, not a crash."
+        "timeout (default 75s) so Render stays responsive. Disabled by default "
+        "on small hosts — set SPIDERFOOT_ENABLED=1 on a larger box. Breach, "
+        "dump, and dark-web modules are not enabled. Common dictionary "
+        "usernames are skipped by Account Finder. Missing binary or disabled "
+        "flag → unavailable, not a crash."
     )
     timeout = SPIDERFOOT_TIMEOUT
     heavy = True

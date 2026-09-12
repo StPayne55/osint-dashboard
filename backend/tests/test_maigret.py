@@ -93,6 +93,7 @@ def test_derive_username_matches_sherlock_style():
     name = build_query("Ada Lovelace")
     assert derive_username(name)
     assert derive_username(build_query("+1 415 555 2671")) is None
+    assert derive_username(build_query("Lisa.m.fraleigh@gmail.com")).lower() == "lisamfraleigh"
 
 
 def test_run_maps_mocked_search(monkeypatch):
@@ -139,6 +140,49 @@ def test_username_jobs_plan_maigret_phone_does_not():
     phone = build_query("+1 415 555 2671")
     planned_phone = [s.id for s in all_scanners() if s.applicable(phone) or s.optional_key]
     assert "maigret" not in planned_phone
+
+
+def test_dotted_email_tries_undotted_handle_first(monkeypatch):
+    scanner = MaigretScanner()
+    monkeypatch.setattr("app.scanners.maigret_scan._load_maigret", lambda: (object(), object()))
+    seen: list[str] = []
+
+    async def fake_search(username: str, loaded):
+        seen.append(username)
+        if username.lower() == "lisamfraleigh":
+            return {
+                "results": {
+                    "GitHub": _claimed("https://github.com/lisamfraleigh"),
+                },
+                "subset": True,
+                "top": 50,
+                "checked": 1,
+                "found": [{"site": "GitHub", "url": "https://github.com/lisamfraleigh", "found": True}],
+            }
+        return {
+            "results": {
+                "GitHub": _claimed("https://github.com/lisamfraleigh"),
+                "Twitter": _claimed("https://twitter.com/lisa.m.fraleigh"),
+            },
+            "subset": True,
+            "top": 50,
+            "checked": 2,
+            "found": [],
+        }
+
+    monkeypatch.setattr(scanner, "_search", fake_search)
+    result = asyncio.run(scanner.run(build_query("Lisa.m.fraleigh@gmail.com")))
+    assert result.status.status == "success"
+    assert seen[0].lower() == "lisamfraleigh"
+    assert "lisamfraleigh" in seen[0].lower()
+    assert any("lisa.m.fraleigh" in u.lower() for u in seen)
+    urls = {f.url for f in result.findings if f.kind == "profile"}
+    assert urls == {
+        "https://github.com/lisamfraleigh",
+        "https://twitter.com/lisa.m.fraleigh",
+    }
+    assert "lisamfraleigh" in result.status.summary
+    assert "lisa.m.fraleigh" in result.status.summary
 
 
 def test_search_loads_database_off_loop_and_awaits_maigret(monkeypatch):

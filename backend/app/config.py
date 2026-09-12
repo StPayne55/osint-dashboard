@@ -10,14 +10,26 @@ API_HOST = os.getenv("OSINT_HOST", "0.0.0.0")
 API_PORT = int(os.getenv("OSINT_PORT", "8742"))
 
 
-def _int_env(name: str, default: int, minimum: int = 1) -> int:
+def _int_env(name: str, default: int, minimum: int = 1, maximum: int | None = None) -> int:
     raw = (os.getenv(name) or "").strip()
     if not raw:
+        value = default
+    else:
+        try:
+            value = max(minimum, int(raw))
+        except ValueError:
+            value = default
+    if maximum is not None:
+        return min(maximum, value)
+    return value
+
+
+def env_flag(name: str, default: bool = False) -> bool:
+    """Opt-in boolean. Missing or blank uses *default*; only 1/true/yes/on enable."""
+    raw = os.getenv(name)
+    if raw is None or not raw.strip():
         return default
-    try:
-        return max(minimum, int(raw))
-    except ValueError:
-        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
 # Per-scanner wall clocks. One hung tool must not block the report.
@@ -31,14 +43,13 @@ PHONE_TIMEOUT = float(os.getenv("PHONE_TIMEOUT", "30"))
 # single small host (Render free) is not starved by five parallel site crawls.
 # Lightweight modules (Gravatar, MX, dorks, Twilio, …) stay ungated.
 HEAVY_SCANNER_CONCURRENCY = _int_env("HEAVY_SCANNER_CONCURRENCY", 1)
-# SpiderFoot OSS is slow; keep a hard wall clock so one scan cannot stall Render.
+# Sherlock / Maigret / Socialscan try this many derived handles (2–3).
+# Prefer undotted local-parts first when the email contains . or +.
+SOCIAL_USERNAME_CANDIDATES = _int_env("SOCIAL_USERNAME_CANDIDATES", 2, minimum=1, maximum=3)
+# SpiderFoot OSS is slow and regularly hits the wall clock on Render free.
+# Off unless explicitly enabled (SPIDERFOOT_ENABLED=1) on a larger box.
 SPIDERFOOT_TIMEOUT = float(os.getenv("SPIDERFOOT_TIMEOUT", "75"))
-SPIDERFOOT_ENABLED = os.getenv("SPIDERFOOT_ENABLED", "1").strip().lower() not in {
-    "0",
-    "false",
-    "no",
-    "off",
-}
+SPIDERFOOT_ENABLED = env_flag("SPIDERFOOT_ENABLED", default=False)
 SPIDERFOOT_HOME = os.getenv("SPIDERFOOT_HOME", "/opt/spiderfoot").strip() or "/opt/spiderfoot"
 SPIDERFOOT_USECASE = os.getenv("SPIDERFOOT_USECASE", "").strip().lower()
 SPIDERFOOT_MODULES = os.getenv("SPIDERFOOT_MODULES", "").strip()

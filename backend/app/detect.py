@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import os
 import re
 import unicodedata
 
 import phonenumbers
 from phonenumbers import NumberParseException
 
-from app.models import Query, QueryType
+from app.config import SOCIAL_USERNAME_CANDIDATES
+from app.models import Finding, Query, QueryType
 
 EMAIL_RE = re.compile(
     r"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$"
@@ -77,25 +79,47 @@ def parse_phone(text: str) -> tuple[str | None, str | None, str | None]:
     return None, None, None
 
 
+def _clean_handle(value: str | None) -> str | None:
+    if not value:
+        return None
+    cleaned = re.sub(r"[^A-Za-z0-9._\-]", "", value)
+    cleaned = cleaned.strip("._-")
+    if 2 <= len(cleaned) <= 32:
+        return cleaned
+    return None
+
+
 def username_candidates(query: Query) -> list[str]:
     found: list[str] = []
 
     def add(value: str | None) -> None:
-        if not value:
-            return
-        cleaned = re.sub(r"[^A-Za-z0-9._\-]", "", value)
-        cleaned = cleaned.strip("._-")
-        if 2 <= len(cleaned) <= 32 and cleaned.lower() not in {x.lower() for x in found}:
+        cleaned = _clean_handle(value)
+        if cleaned and cleaned.lower() not in {x.lower() for x in found}:
             found.append(cleaned)
 
-    if query.username:
-        add(query.username.lstrip("@"))
     if query.email:
         local = query.email.split("@", 1)[0]
-        add(local)
-        add(local.replace(".", ""))
+        plus_base = local.split("+", 1)[0]
+        compact = re.sub(r"[.+]", "", local)
+        # Dotted / plus-tagged Gmail locals are rejected by most social sites.
+        # Put the alphanumeric variant first so Sherlock/Maigret try it.
+        if "." in local or "+" in local:
+            add(compact)
+            if plus_base != local:
+                add(plus_base.replace(".", ""))
+                add(plus_base)
+            add(local)
+        else:
+            add(local)
         add(local.replace("_", ""))
-        add(re.sub(r"\d+$", "", local))
+        add(re.sub(r"\d+$", "", plus_base))
+        if compact != local:
+            add(re.sub(r"\d+$", "", compact))
+    if query.username:
+        handle = query.username.lstrip("@")
+        add(handle)
+        if "." in handle or "+" in handle:
+            add(re.sub(r"[.+]", "", handle))
     if query.name:
         parts = [p for p in re.split(r"\s+", query.name) if p]
         if parts:
@@ -113,6 +137,90 @@ def username_candidates(query: Query) -> list[str]:
     return found[:12]
 
 
+def social_candidate_limit(limit: int | None = None) -> int:
+    if limit is not None:
+        return max(1, min(3, limit))
+    return max(1, min(3, _int_social_cap()))
+
+
+def _int_social_cap() -> int:
+    raw = (os.getenv("SOCIAL_USERNAME_CANDIDATES") or "").strip()
+    if raw:
+        try:
+            return max(1, min(3, int(raw)))
+        except ValueError:
+            pass
+    return max(1, min(3, SOCIAL_USERNAME_CANDIDATES))
+
+
+def social_username_candidates(query: Query, limit: int | None = None) -> list[str]:
+    """Handles Sherlock / Maigret / Socialscan should actually query.
+
+    Builds an ordered list from ``username_candidates`` plus the primary
+    username, prefers undotted / alphanumeric handles when the email
+    local-part contains ``.`` or ``+``, and caps at 2–3
+    (``SOCIAL_USERNAME_CANDIDATES``, default 2).
+    """
+    cap = social_candidate_limit(limit)
+    seen: set[str] = set()
+    ordered: list[str] = []
+
+    def add(value: str | None) -> None:
+        cleaned = _clean_handle(value.lstrip("@") if value else None)
+        if not cleaned:
+            return
+        key = cleaned.lower()
+        if key in seen:
+            return
+        seen.add(key)
+        ordered.append(cleaned)
+
+    for candidate in query.username_candidates:
+        add(candidate)
+    add(query.username)
+    if query.email:
+        add(query.email.split("@", 1)[0])
+
+    email_local = (query.email or "").split("@", 1)[0]
+    if email_local and ("." in email_local or "+" in email_local):
+
+        def rank(handle: str) -> tuple[int, int]:
+            seps = 1 if any(ch in handle for ch in ".+") else 0
+            non_alnum = 1 if re.search(r"[^A-Za-z0-9]", handle) else 0
+            return (seps, non_alnum)
+
+        # Stable sort: keep detect order, just float site-friendly handles first.
+        ordered.sort(key=rank)
+
+    return ordered[:cap]
+
+
+def merge_findings_by_url(findings: list[Finding]) -> list[Finding]:
+    """Keep first finding per concrete URL (or kind/title/value when URL-less)."""
+    seen: set[str] = set()
+    merged: list[Finding] = []
+    for finding in findings:
+        if finding.url:
+            key = "url:" + finding.url.rstrip("/").lower()
+        else:
+            key = f"{finding.kind}|{finding.title}|{finding.value}"
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(finding)
+    return merged
+
+
+def format_tried_handles(handles: list[str]) -> str:
+    return ", ".join(f"@{h}" for h in handles)
+
+
+def derive_username(query: Query) -> str | None:
+    """Primary handle for social search (first social candidate)."""
+    handles = social_username_candidates(query, limit=1)
+    return handles[0] if handles else None
+
+
 def build_query(raw: str, override: QueryType = QueryType.auto) -> Query:
     text = _norm(raw)
     if not text:
@@ -123,7 +231,7 @@ def build_query(raw: str, override: QueryType = QueryType.auto) -> Query:
     if qtype == QueryType.email:
         query.email = text.lower()
         query.domain = text.split("@", 1)[1].lower()
-        query.username = text.split("@", 1)[0]
+        query.username = text.split("@", 1)[0].lower()
     elif qtype == QueryType.phone:
         e164, national, cc = parse_phone(text)
         query.phone_e164 = e164

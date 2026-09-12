@@ -5,6 +5,7 @@ import os
 from typing import Any
 
 from app.config import SHERLOCK_FULL, SHERLOCK_SITE_TIMEOUT, SHERLOCK_TIMEOUT
+from app.detect import format_tried_handles, merge_findings_by_url, social_username_candidates
 from app.models import Finding, Query, QueryType, ScannerResult
 from app.profile_urls import is_concrete_profile_url
 from app.scanners.base import Scanner
@@ -75,7 +76,8 @@ class SherlockScanner(Scanner):
     limitations = (
         "Existence checks can false-positive on soft-404 pages. NSFW sites are "
         "excluded unless SHERLOCK_NSFW=1. Default run uses a high-signal site "
-        "subset; set SHERLOCK_FULL=1 for the complete list."
+        "subset; set SHERLOCK_FULL=1 for the complete list. Email local-parts "
+        "with dots try an alphanumeric handle first (SOCIAL_USERNAME_CANDIDATES)."
     )
     timeout = SHERLOCK_TIMEOUT
     heavy = True
@@ -98,34 +100,86 @@ class SherlockScanner(Scanner):
                 "sherlock-project is not installed",
                 error="pip install sherlock-project",
             )
-        username = (query.username or (query.username_candidates[0] if query.username_candidates else "")).lstrip("@")
-        if not username:
+        handles = social_username_candidates(query)
+        if not handles:
             return self._result("skipped", "No username candidate")
 
-        try:
-            raw = await asyncio.to_thread(self._sherlock, username)
-        except Exception as exc:
-            return self._result("error", "Sherlock failed", error=str(exc))
+        wall = float(os.getenv("SHERLOCK_TIMEOUT", self.timeout))
+        pad = 5.0 if wall >= 20 else max(0.05, wall * 0.2)
+        inner = max(0.05, wall - pad)
+        deadline = asyncio.get_running_loop().time() + inner
 
-        findings = [
-            Finding(
-                kind="profile",
-                title=row["site"],
-                value=row["url"],
-                url=row["url"],
-                extra={"username": username, "status": row.get("status")},
+        tried: list[str] = []
+        collected: list[Finding] = []
+        runs: list[dict[str, Any]] = []
+        timed_out = False
+        last_error: str | None = None
+
+        for username in handles:
+            remaining = deadline - asyncio.get_running_loop().time()
+            if remaining <= 0.05:
+                timed_out = True
+                break
+            try:
+                raw = await asyncio.wait_for(
+                    asyncio.to_thread(self._sherlock, username),
+                    timeout=remaining,
+                )
+            except asyncio.TimeoutError:
+                timed_out = True
+                break
+            except Exception as exc:
+                last_error = str(exc)
+                continue
+            tried.append(username)
+            collected.extend(
+                Finding(
+                    kind="profile",
+                    title=row["site"],
+                    value=row["url"],
+                    url=row["url"],
+                    extra={"username": username, "status": row.get("status")},
+                )
+                for row in raw.get("found", [])
+                if is_concrete_profile_url(row.get("url"))
             )
-            for row in raw.get("found", [])
-            if is_concrete_profile_url(row.get("url"))
-        ]
+            runs.append(
+                {
+                    "username": username,
+                    "checked": raw.get("checked"),
+                    "found": raw.get("found"),
+                    "subset": raw.get("subset"),
+                }
+            )
+
+        findings = merge_findings_by_url(collected)
+        tried_label = format_tried_handles(tried or handles)
+        raw_out = {
+            "usernames": tried,
+            "runs": runs,
+            "subset": any(r.get("subset") for r in runs),
+        }
+
+        if not tried and timed_out:
+            return self._result(
+                "timeout",
+                f"Timed out after {int(inner)}s · tried {format_tried_handles(handles)}",
+                error="timeout",
+                raw=raw_out,
+            )
+        if not tried:
+            return self._result("error", "Sherlock failed", error=last_error or "no runs", raw=raw_out)
+
         summary = (
-            f"{len(findings)} profile(s) for @{username}"
+            f"{len(findings)} profile(s) for {tried_label}"
             if findings
-            else f"No Sherlock hits for @{username}"
+            else f"No Sherlock hits for {tried_label}"
         )
-        if raw.get("subset"):
+        if raw_out.get("subset"):
             summary += " · high-signal site subset"
-        return self._result("success", summary, findings=findings, raw=raw)
+        if timed_out:
+            summary += " · later handle(s) timed out"
+        return self._result("success", summary, findings=findings, raw=raw_out)
 
     def _sherlock(self, username: str) -> dict[str, Any]:
         from sherlock_project.notify import QueryNotify

@@ -56,9 +56,9 @@ cd backend && PYTHONPATH=. pytest
 | Gravatar | public API | email | Avatar + published profile/accounts | Only if they opted in |
 | Holehe | `holehe` | email | Sites that appear to have the email | Rate-limits look like misses |
 | Socialscan | `socialscan` | email, username | Taken vs available on a small platform set | Few sites; no profile URLs |
-| Sherlock | `sherlock-project` | username (or derived) | Profile URLs on a high-signal site subset | Soft-404 false positives possible. `SHERLOCK_FULL=1` for the complete list |
-| Maigret | `maigret` (PyPI) | username (or derived) | Broader username dossier: profile URLs, tags, public display names / photos when parsing is on | Default top-50 ranked sites, no Tor/.onion, disabled+NSFW sites skipped. `MAIGRET_FULL=1` for the complete enabled list. Soft-404s possible. Missing package → unavailable |
-| SpiderFoot | SpiderFoot OSS CLI (not HX) | username, email, name, phone | Account/social profile URLs from a limited module set (Account Finder, GitHub, Twitter, …) | Hard timeout (default 75s). Breach/dark-web modules are not enabled. Dictionary-word usernames are skipped. Missing `sf.py` → unavailable |
+| Sherlock | `sherlock-project` | username (or derived) | Profile URLs on a high-signal site subset. Tries 2–3 username candidates (undotted email locals first) | Soft-404 false positives possible. `SHERLOCK_FULL=1` for the complete list |
+| Maigret | `maigret` (PyPI) | username (or derived) | Broader username dossier: profile URLs, tags, public display names / photos when parsing is on. Same multi-handle order as Sherlock | Default top-50 ranked sites, no Tor/.onion, disabled+NSFW sites skipped. `MAIGRET_FULL=1` for the complete enabled list. Soft-404s possible. Missing package → unavailable |
+| SpiderFoot | SpiderFoot OSS CLI (not HX) | username, email, name, phone | Account/social profile URLs from a limited module set (Account Finder, GitHub, Twitter, …) | **Off by default** (times out on Render free). Set `SPIDERFOOT_ENABLED=1` on a larger box. Hard timeout (default 75s). Breach/dark-web modules are not enabled. Dictionary-word usernames are skipped. Missing/`disabled` → Catalog shows unavailable |
 | Phone metadata | `phonenumbers` + `ignorant` | phone | E.164, country, carrier dataset, line type, site *registration* notes | Not CNAM / not an address. Ignorant hits are not profile URLs. PhoneInfoga binary is not bundled |
 | theHarvester / CT | crt.sh + HackerTarget (+ CLI if present) | company email domain | Public hostnames / emails for that domain | Consumer mailboxes (Gmail, Yahoo, Outlook, …) are skipped — crt.sh noise is not people. Harvested addresses are filtered to the query / same local-part / company domain and capped |
 | Search links / dorks | built-in | all | Google, DuckDuckGo, Bing, LinkedIn, plus labeled reverse-lookup links for phones | Links only; no scraping |
@@ -78,7 +78,7 @@ Scans run **in-process via the CLI** (`sf.py -s … -o json -q`) inside the same
 
 | Env | Default | Meaning |
 | --- | --- | --- |
-| `SPIDERFOOT_ENABLED` | `1` if `sf.py` is present | Set `0` to hide the scanner |
+| `SPIDERFOOT_ENABLED` | off (missing = off) | Set `1` to run the scanner on a larger box |
 | `SPIDERFOOT_TIMEOUT` | `75` | Wall clock; CLI is killed ~5s earlier |
 | `SPIDERFOOT_MODULES` | social/account allowlist | Comma-separated override |
 | `SPIDERFOOT_USECASE` | unset | `passive` / `footprint` only if you want a broader set |
@@ -92,13 +92,15 @@ Local (no Docker): clone OSS v4.0, create a venv, `pip install -r docker/spiderf
 
 ## Render free tier
 
-A single small instance cannot run Holehe, Socialscan, Sherlock, Maigret, and SpiderFoot at once — they starve each other (and even Gravatar) until every module times out. Defaults are tuned for that host:
+A single small instance cannot run Holehe, Socialscan, Sherlock, Maigret, and SpiderFoot at once — they starve each other (and even Gravatar) until every module times out. Defaults are tuned for that host. **SpiderFoot stays off** unless you set `SPIDERFOOT_ENABLED=1` (it usually hits the 75s wall clock on free instances).
 
 | Env | Default | Meaning |
 | --- | --- | --- |
 | `HEAVY_SCANNER_CONCURRENCY` | `1` | Shared slot for those five social crawlers. Set `2` on a larger box. |
+| `SOCIAL_USERNAME_CANDIDATES` | `2` | Sherlock / Maigret / Socialscan handles to try (max 3). Undotted first when the email local-part has `.` or `+`. |
 | `MAIGRET_TOP_SITES` | `50` | Ranked site slice. Raise toward 200+ if you have CPU to spare. |
 | `MAIGRET_MAX_CONNECTIONS` | `10` | Concurrent Maigret HTTP connections |
+| `SPIDERFOOT_ENABLED` | off | Set `1` only on a larger box; Catalog shows unavailable/disabled otherwise |
 | `SPIDERFOOT_TIMEOUT` | `75` | SF wall clock; modules stay on the social/account allowlist |
 | `SPIDERFOOT_MAX_THREADS` | `2` | `sf.py -max-threads` |
 | `SHERLOCK_FULL` | unset | Sherlock stays on the high-signal subset unless you set `1` |
@@ -113,7 +115,7 @@ Lightweight modules (username candidates, MX, Gravatar, dorks, Twilio, HIBP, …
 
 ## Smoke path
 
-`example@example.com` should return structured sections without crashing: MX for `example.com`, a Gravatar hash (usually no avatar), Holehe site checks, generated username `example`, and a pack of dork links. `torvalds` should return Sherlock, Maigret, and (when bundled) SpiderFoot profile URLs when the network allows. Without `/opt/spiderfoot/sf.py`, SpiderFoot stays `unavailable` and the rest of the report still completes. Missing `maigret` is the same: that module is `unavailable`, not a crash.
+`example@example.com` should return structured sections without crashing: MX for `example.com`, a Gravatar hash (usually no avatar), Holehe site checks, generated username `example`, and a pack of dork links. A dotted Gmail local-part such as `Lisa.m.fraleigh@gmail.com` should list `lisamfraleigh` ahead of `lisa.m.fraleigh`, and Sherlock/Maigret should try the undotted handle first. `torvalds` should return Sherlock and Maigret profile URLs when the network allows. SpiderFoot stays `unavailable` unless `SPIDERFOOT_ENABLED=1` (and `sf.py` is present). Missing `maigret` is the same: that module is `unavailable`, not a crash.
 
 ## UI
 

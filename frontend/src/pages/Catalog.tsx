@@ -35,7 +35,7 @@ export function Catalog() {
                 </span>
               ))}
               <span className={scanner.available ? "tag ok" : "tag no"}>
-                {scanner.available ? "ready" : "unavailable / needs key"}
+                {scanner.available ? "ready" : "unavailable / disabled"}
               </span>
               {scanner.optional_key && <span className="tag">{scanner.optional_key}</span>}
             </div>

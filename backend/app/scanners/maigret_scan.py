@@ -14,6 +14,12 @@ from app.config import (
     MAIGRET_TIMEOUT,
     MAIGRET_TOP_SITES,
 )
+from app.detect import (
+    derive_username,
+    format_tried_handles,
+    merge_findings_by_url,
+    social_username_candidates,
+)
 from app.models import Finding, Query, QueryType, ScannerResult
 from app.profile_urls import is_concrete_profile_url
 from app.scanners.base import Scanner
@@ -34,16 +40,6 @@ def _load_maigret() -> tuple[Any, Any] | None:
     except Exception:
         return None
     return maigret_search, MaigretDatabase
-
-
-def derive_username(query: Query) -> str | None:
-    if query.username:
-        return query.username.lstrip("@")
-    if query.username_candidates:
-        return query.username_candidates[0].lstrip("@")
-    if query.email:
-        return query.email.split("@", 1)[0]
-    return None
 
 
 def _status_found(status: Any) -> bool:
@@ -143,7 +139,8 @@ class MaigretScanner(Scanner):
         "Default run uses the top-ranked site slice (MAIGRET_TOP_SITES, default 50) "
         "and skips disabled, NSFW, and .onion sites. Soft-404s still happen. "
         "Set MAIGRET_FULL=1 for the complete enabled list (slower). "
-        "Missing package → unavailable."
+        "Email local-parts with dots try an alphanumeric handle first "
+        "(SOCIAL_USERNAME_CANDIDATES). Missing package → unavailable."
     )
     timeout = MAIGRET_TIMEOUT
     heavy = True
@@ -162,34 +159,78 @@ class MaigretScanner(Scanner):
                 "maigret is not installed",
                 error="pip install maigret",
             )
-        username = derive_username(query)
-        if not username:
+        handles = social_username_candidates(query)
+        if not handles:
             return self._result("skipped", "No username candidate")
 
         wall = float(os.getenv("MAIGRET_TIMEOUT", self.timeout))
         pad = 5.0 if wall >= 20 else max(0.05, wall * 0.2)
         inner = max(0.05, wall - pad)
-        try:
-            raw = await asyncio.wait_for(self._search(username, loaded), timeout=inner)
-        except asyncio.TimeoutError:
+        deadline = asyncio.get_running_loop().time() + inner
+
+        tried: list[str] = []
+        collected: list[Finding] = []
+        runs: list[dict[str, Any]] = []
+        timed_out = False
+        last_error: str | None = None
+
+        for username in handles:
+            remaining = deadline - asyncio.get_running_loop().time()
+            if remaining <= 0.05:
+                timed_out = True
+                break
+            try:
+                raw = await asyncio.wait_for(self._search(username, loaded), timeout=remaining)
+            except asyncio.TimeoutError:
+                timed_out = True
+                break
+            except Exception as exc:
+                last_error = str(exc)
+                continue
+            tried.append(username)
+            collected.extend(findings_from_results(raw.get("results") or {}, username))
+            runs.append(
+                {
+                    "username": username,
+                    "checked": raw.get("checked"),
+                    "found": raw.get("found"),
+                    "subset": raw.get("subset"),
+                    "top": raw.get("top"),
+                }
+            )
+
+        findings = merge_findings_by_url(collected)
+        profiles = sum(1 for f in findings if f.kind == "profile")
+        tried_label = format_tried_handles(tried or handles)
+        raw_out = {
+            "usernames": tried,
+            "runs": runs,
+            "subset": any(r.get("subset") for r in runs),
+            "top": next((r.get("top") for r in runs if r.get("top")), None),
+        }
+
+        if not tried and timed_out:
             return self._result(
                 "timeout",
-                f"Timed out after {int(inner)}s",
+                f"Timed out after {int(inner)}s · tried {format_tried_handles(handles)}",
                 error="timeout",
+                raw=raw_out,
             )
-        except Exception as exc:
-            return self._result("error", "Maigret failed", error=str(exc))
+        if not tried and last_error:
+            return self._result("error", "Maigret failed", error=last_error, raw=raw_out)
+        if not tried:
+            return self._result("error", "Maigret failed", error=last_error or "no runs")
 
-        findings = findings_from_results(raw.get("results") or {}, username)
-        profiles = sum(1 for f in findings if f.kind == "profile")
         summary = (
-            f"{profiles} profile(s) for @{username}"
+            f"{profiles} profile(s) for {tried_label}"
             if profiles
-            else f"No Maigret hits for @{username}"
+            else f"No Maigret hits for {tried_label}"
         )
-        if raw.get("subset"):
-            summary += f" · top {raw.get('top')} sites"
-        return self._result("success", summary, findings=findings, raw=raw)
+        if raw_out.get("subset") and raw_out.get("top"):
+            summary += f" · top {raw_out.get('top')} sites"
+        if timed_out:
+            summary += " · later handle(s) timed out"
+        return self._result("success", summary, findings=findings, raw=raw_out)
 
     async def _search(self, username: str, loaded: tuple[Any, Any]) -> dict[str, Any]:
         maigret_search, database_cls = loaded
