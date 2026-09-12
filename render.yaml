@@ -51,4 +51,4 @@ services:
       - key: SPIDERFOOT_HOME
         value: /opt/spiderfoot
       - key: SPIDERFOOT_MAX_THREADS
-        value: "2"
+        value: "8"

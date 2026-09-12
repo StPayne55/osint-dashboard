@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import signal
 import subprocess
@@ -10,6 +11,10 @@ import sys
 import tempfile
 from pathlib import Path
 from typing import Any
+
+from salvage import merge_events, salvage_scan_events
+
+log = logging.getLogger("spiderfoot-runner")
 
 # Keep in sync with backend/app/scanners/spiderfoot_scan.py
 DEFAULT_MODULES = (
@@ -141,8 +146,28 @@ def stdout_excerpt(stdout: str, limit: int = 2000) -> str:
     return text[:limit] + "…"
 
 
+def stderr_excerpt(stderr: str, limit: int = 2000) -> str:
+    return stdout_excerpt(stderr, limit=limit)
+
+
+def max_threads() -> int:
+    raw = (os.getenv("SPIDERFOOT_MAX_THREADS") or "8").strip()
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return 8
+
+
+def abort_grace_seconds() -> float:
+    raw = (os.getenv("SPIDERFOOT_ABORT_GRACE") or "4").strip()
+    try:
+        return max(1.0, float(raw))
+    except ValueError:
+        return 4.0
+
+
 def build_command(target: str, script: Path, modules: list[str]) -> list[str]:
-    threads = max(1, int(os.getenv("SPIDERFOOT_MAX_THREADS", "2")))
+    threads = max_threads()
     return [
         sf_python(),
         str(script),
@@ -162,16 +187,15 @@ def build_command(target: str, script: Path, modules: list[str]) -> list[str]:
 
 
 def run_spiderfoot(target: str, modules: list[str] | None = None, timeout: int = 180) -> dict[str, Any]:
-    """Run sf.py off the caller thread. Always kill the process group on timeout."""
+    """Run sf.py off the caller thread. On timeout, salvage events from SQLite."""
     script = sf_script_path()
     if script is None:
-        return {
-            "status": "error",
-            "target": target,
-            "events": [],
-            "stdout_excerpt": "",
-            "error": f"sf.py not found under {sf_home()}",
-        }
+        return _payload(
+            "error",
+            target,
+            [],
+            error=f"sf.py not found under {sf_home()}",
+        )
     chosen = sanitize_modules(modules)
     wall = max(10, int(timeout))
     cmd = build_command(target, script, chosen)
@@ -180,8 +204,15 @@ def run_spiderfoot(target: str, modules: list[str] | None = None, timeout: int =
     stderr = ""
     status = "ok"
     error: str | None = None
+    salvaged: list[dict[str, Any]] = []
+    scan_id: str | None = None
     with tempfile.TemporaryDirectory(prefix="sf-runner-") as tmp:
+        data_dir = Path(tmp) / ".spiderfoot"
+        data_dir.mkdir(parents=True, exist_ok=True)
         env["HOME"] = tmp
+        # Isolate the scan DB so we can find it after a timeout. sf.py v4.0
+        # writes {SPIDERFOOT_DATA or $HOME/.spiderfoot}/spiderfoot.db.
+        env["SPIDERFOOT_DATA"] = str(data_dir)
         env.setdefault("PYTHONUNBUFFERED", "1")
         proc = subprocess.Popen(
             cmd,
@@ -195,33 +226,102 @@ def run_spiderfoot(target: str, modules: list[str] | None = None, timeout: int =
         try:
             stdout, stderr = proc.communicate(timeout=wall)
         except subprocess.TimeoutExpired:
-            _kill_group(proc)
-            try:
-                stdout, stderr = proc.communicate(timeout=5)
-            except Exception:
-                stdout, stderr = "", ""
+            stdout, stderr = _graceful_abort(proc)
             status = "timeout"
             error = f"timeout after {wall}s"
+            salvaged, scan_id = salvage_scan_events(data_dir, tmp, target=target)
         except Exception as exc:
             _kill_group(proc)
-            return {
-                "status": "error",
-                "target": target,
-                "events": [],
-                "stdout_excerpt": "",
-                "error": str(exc)[:500],
-            }
-    if status == "ok" and proc.returncode not in (0, None) and not (stdout or "").strip():
-        status = "error"
-        error = ((stderr or "").strip() or f"exit {proc.returncode}")[:500]
-    events = parse_spiderfoot_stdout(stdout or "")
+            err_text = str(exc)[:500]
+            log.warning("sf.py error for %s: %s", target, err_text)
+            return _payload("error", target, [], error=err_text)
+        if status == "ok" and proc.returncode not in (0, None) and not (stdout or "").strip():
+            status = "error"
+            error = ((stderr or "").strip() or f"exit {proc.returncode}")[:500]
+            salvaged, scan_id = salvage_scan_events(data_dir, tmp, target=target)
+        events = merge_events(parse_spiderfoot_stdout(stdout or ""), salvaged)
+        if status in {"timeout", "error"}:
+            _log_failure(status, target, stderr, events)
+        return _payload(
+            status,
+            target,
+            events,
+            stdout=stdout,
+            stderr=stderr,
+            error=error,
+            scan_id=scan_id,
+            salvaged=bool(salvaged),
+        )
+
+
+def _payload(
+    status: str,
+    target: str,
+    events: list[dict[str, Any]],
+    *,
+    stdout: str = "",
+    stderr: str = "",
+    error: str | None = None,
+    scan_id: str | None = None,
+    salvaged: bool = False,
+) -> dict[str, Any]:
     return {
         "status": status,
         "target": target,
         "events": events,
         "stdout_excerpt": stdout_excerpt(stdout or ""),
+        "stderr_excerpt": stderr_excerpt(stderr or ""),
         "error": error,
+        "scan_id": scan_id,
+        "salvaged": salvaged,
     }
+
+
+def _log_failure(status: str, target: str, stderr: str, events: list[dict[str, Any]]) -> None:
+    excerpt = stderr_excerpt(stderr or "")
+    log.warning(
+        "sf.py %s for %s (%s event(s)) stderr: %s",
+        status,
+        target,
+        len(events),
+        excerpt or "(empty)",
+    )
+
+
+def _signal_group(proc: subprocess.Popen[str], sig: int) -> None:
+    if proc.poll() is not None:
+        return
+    try:
+        os.killpg(proc.pid, sig)
+    except (ProcessLookupError, PermissionError, OSError):
+        try:
+            proc.send_signal(sig)
+        except Exception:
+            return
+
+
+def _graceful_abort(proc: subprocess.Popen[str], grace: float | None = None) -> tuple[str, str]:
+    """SIGINT so sf.py handle_abort marks ABORTED, then SIGTERM, then SIGKILL."""
+    wait = abort_grace_seconds() if grace is None else max(1.0, float(grace))
+    _signal_group(proc, signal.SIGINT)
+    try:
+        return proc.communicate(timeout=wait)
+    except subprocess.TimeoutExpired:
+        pass
+    except Exception:
+        pass
+    _signal_group(proc, signal.SIGTERM)
+    try:
+        return proc.communicate(timeout=2)
+    except subprocess.TimeoutExpired:
+        pass
+    except Exception:
+        pass
+    _kill_group(proc)
+    try:
+        return proc.communicate(timeout=3)
+    except Exception:
+        return "", ""
 
 
 def _kill_group(proc: subprocess.Popen[str]) -> None:

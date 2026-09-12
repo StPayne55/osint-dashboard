@@ -433,6 +433,9 @@ class SpiderFootScanner(Scanner):
         *,
         mode: str,
         stdout_excerpt: str = "",
+        stderr_excerpt: str = "",
+        scan_id: str | None = None,
+        salvaged: bool = False,
     ) -> ScannerResult:
         findings = events_to_findings(events)
         profiles = sum(1 for f in findings if f.kind == "profile")
@@ -444,6 +447,9 @@ class SpiderFootScanner(Scanner):
             "partial": status == "timeout",
             "mode": mode,
             "stdout_excerpt": stdout_excerpt,
+            "stderr_excerpt": stderr_excerpt,
+            "scan_id": scan_id,
+            "salvaged": salvaged,
         }
         if status == "timeout":
             summary = (
@@ -517,6 +523,8 @@ class SpiderFootScanner(Scanner):
             status = "error"
         error = body.get("error")
         excerpt = str(body.get("stdout_excerpt") or "")
+        err_excerpt = str(body.get("stderr_excerpt") or "")
+        scan_id = body.get("scan_id")
         return self._finish(
             str(body.get("target") or target),
             events,
@@ -524,6 +532,9 @@ class SpiderFootScanner(Scanner):
             str(error) if error else None,
             mode="remote",
             stdout_excerpt=excerpt[:2000],
+            stderr_excerpt=err_excerpt[:2000],
+            scan_id=str(scan_id) if scan_id else None,
+            salvaged=bool(body.get("salvaged")),
         )
 
     def _build_command(self, target: str, script: Path) -> list[str]:
