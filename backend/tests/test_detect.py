@@ -34,3 +34,10 @@ def test_dorks_not_empty():
     links = build_dorks(q)
     assert len(links) >= 6
     assert any("google.com" in (f.url or "") for f in links)
+
+
+def test_phone_dorks_not_empty():
+    q = build_query("+1 415 555 2671")
+    links = build_dorks(q)
+    assert len(links) >= 10
+    assert any("whitepages.com" in (f.url or "") for f in links)

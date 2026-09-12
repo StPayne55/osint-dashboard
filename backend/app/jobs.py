@@ -12,7 +12,9 @@ from app.config import (
     RATE_LIMIT_SCANS,
     RATE_LIMIT_WINDOW_SEC,
 )
-from app.models import Finding, IdentitySummary, ModuleStatus, Query, Report, ScannerResult
+from app.consumer_mail import HARVEST_EMAIL_CAP, email_local_part, is_consumer_mail_domain
+from app.models import Finding, IdentitySummary, ModuleStatus, PHONE_HONESTY, Query, QueryType, Report, ScannerResult
+from app.profile_urls import is_concrete_profile_url
 from app.scanners import all_scanners
 from app.scanners.base import Scanner
 
@@ -110,7 +112,8 @@ class Job:
                     )
                 )
         identity = _identity(self.query, list(self.results.values()))
-        return Report(
+        honesty = PHONE_HONESTY if self.query.type == QueryType.phone else None
+        report_kwargs: dict[str, Any] = dict(
             job_id=self.id,
             status=self.status,  # type: ignore[arg-type]
             created_at=self.created_at,
@@ -120,6 +123,9 @@ class Job:
             modules=modules,
             findings=findings,
         )
+        if honesty:
+            report_kwargs["honesty"] = honesty
+        return Report(**report_kwargs)
 
 
 def _identity(query: Query, results: list[ScannerResult]) -> IdentitySummary:
@@ -129,6 +135,10 @@ def _identity(query: Query, results: list[ScannerResult]) -> IdentitySummary:
     notes: list[str] = []
     profiles = 0
     images = 0
+    phone_carrier: str | None = None
+    phone_region: str | None = None
+    phone_line_type: str | None = None
+    caller_name: str | None = None
     if query.email:
         emails.append(query.email)
     if query.phone_e164:
@@ -143,19 +153,52 @@ def _identity(query: Query, results: list[ScannerResult]) -> IdentitySummary:
             elif finding.kind == "username" and finding.value not in usernames:
                 usernames.append(finding.value)
             elif finding.kind == "profile":
-                profiles += 1
+                if is_concrete_profile_url(finding.url):
+                    profiles += 1
             elif finding.kind == "image":
                 images += 1
             elif finding.kind == "note":
                 notes.append(finding.value)
+
+            title = (finding.title or "").strip().lower()
+            extra = finding.extra or {}
+            if finding.kind in {"metadata", "phone", "note"}:
+                if title in {"carrier", "carrier (dataset)"} and finding.value:
+                    phone_carrier = phone_carrier or finding.value
+                if title in {"region", "location"} and finding.value:
+                    phone_region = phone_region or finding.value
+                if title in {"line type"} and finding.value:
+                    phone_line_type = phone_line_type or finding.value
+                if title in {"caller name (cnam)", "caller name"} and finding.kind == "metadata":
+                    caller_name = caller_name or finding.value
+            if extra.get("carrier") and not phone_carrier:
+                phone_carrier = str(extra["carrier"])
+            if extra.get("region") and not phone_region:
+                phone_region = str(extra["region"])
+            if extra.get("line_type") and not phone_line_type:
+                phone_line_type = str(extra["line_type"])
+
+    if query.email and is_consumer_mail_domain(query.domain):
+        q = query.email.lower()
+        q_local = email_local_part(q)
+        emails = [
+            e
+            for e in emails
+            if e.lower() == q or email_local_part(e) == q_local
+        ]
+
     return IdentitySummary(
         query=query,
-        emails=emails[:40],
+        emails=emails[:HARVEST_EMAIL_CAP],
         phones=phones[:20],
         usernames=usernames[:20],
         profiles=profiles,
         images=images,
         notes=notes[:8],
+        phone_carrier=phone_carrier,
+        phone_region=phone_region,
+        phone_line_type=phone_line_type,
+        caller_name=caller_name,
     )
 
 

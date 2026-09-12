@@ -11,6 +11,7 @@ from phonenumbers.phonenumberutil import NumberParseException, number_type
 
 from app.config import PHONE_TIMEOUT
 from app.models import Finding, Query, QueryType, ScannerResult
+from app.profile_urls import is_concrete_profile_url
 from app.scanners.base import Scanner
 
 LINE_TYPES = {
@@ -43,9 +44,10 @@ class PhoneScanner(Scanner):
     )
     accepts = [QueryType.phone]
     limitations = (
-        "Carrier data is from the public libphonenumber dataset and can be stale. "
-        "This is not a CNAM/caller-ID or address lookup. PhoneInfoga is not bundled "
-        "as a binary; ignorant covers a small site set."
+        "Carrier / region / line type come from the public libphonenumber dataset "
+        "and can be stale. Site hits from ignorant mean the number is registered, "
+        "not a profile URL. This is not a CNAM/caller-ID or address lookup unless "
+        "you add Twilio Lookup keys. PhoneInfoga is not bundled as a binary."
     )
     timeout = PHONE_TIMEOUT
 
@@ -130,15 +132,29 @@ class PhoneScanner(Scanner):
         else:
             for row in ignorant_raw.get("exists", []):
                 domain = row.get("domain") or row.get("name")
-                findings.append(
-                    Finding(
-                        kind="profile",
-                        title=str(row.get("name") or domain),
-                        value=f"Number associated on {domain}",
-                        url=f"https://{domain}" if domain else None,
-                        extra=row,
+                raw_url = row.get("url") or row.get("link")
+                if not raw_url and domain:
+                    raw_url = f"https://{domain}"
+                # Registration ≠ profile. Never link a bare site homepage.
+                if is_concrete_profile_url(raw_url if isinstance(raw_url, str) else None):
+                    findings.append(
+                        Finding(
+                            kind="profile",
+                            title=str(row.get("name") or domain),
+                            value=f"Number associated on {domain}",
+                            url=str(raw_url),
+                            extra=row,
+                        )
                     )
-                )
+                else:
+                    findings.append(
+                        Finding(
+                            kind="note",
+                            title=str(row.get("name") or domain or "Site registration"),
+                            value=f"Number appears registered on {domain} (not a profile URL)",
+                            extra=row,
+                        )
+                    )
             if not ignorant_raw.get("exists"):
                 findings.append(
                     Finding(

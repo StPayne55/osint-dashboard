@@ -618,6 +618,17 @@ a.btn:hover {
   margin-bottom: 22px;
 }
 
+.identity.phone-meta {
+  margin-top: -10px;
+}
+
+.section-blurb {
+  margin: -4px 0 12px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .stat {
   background: var(--glass-strong);
   border: 1px solid var(--line);

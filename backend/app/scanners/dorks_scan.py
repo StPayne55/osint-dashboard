@@ -15,8 +15,10 @@ class DorkScanner(Scanner):
     )
     accepts = [QueryType.email, QueryType.phone, QueryType.username, QueryType.name]
     limitations = (
-        "Links only. Commercial people-search sites (Spokeo, BeenVerified, etc.) "
-        "are not queried. Name/address hits must be reviewed manually."
+        "Links only — this module never scrapes those engines. Phone reports include "
+        "labeled reverse-lookup search links (Whitepages, Thatsthem, FastPeopleSearch, "
+        "TruePeopleSearch, Spokeo, 411). Commercial people-search sites are not queried "
+        "via API. Name/address hits must be reviewed manually."
     )
     timeout = 2.0
 

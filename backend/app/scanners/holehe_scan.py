@@ -7,6 +7,7 @@ from typing import Any
 
 from app.config import HOLEHE_TIMEOUT
 from app.models import Finding, Query, QueryType, ScannerResult
+from app.profile_urls import is_concrete_profile_url
 from app.scanners.base import Scanner
 
 
@@ -118,12 +119,18 @@ class HoleheScanner(Scanner):
                 and v
             }
             domain = row.get("domain") or row.get("name") or "unknown"
+            raw_url = row.get("url") or row.get("link")
+            if not raw_url and domain and "." in str(domain):
+                raw_url = f"https://{domain}"
+            url = str(raw_url) if is_concrete_profile_url(
+                raw_url if isinstance(raw_url, str) else None
+            ) else None
             findings.append(
                 Finding(
-                    kind="profile",
+                    kind="profile" if url else "note",
                     title=str(row.get("name") or domain),
                     value=f"Email registered on {domain}",
-                    url=f"https://{domain}" if domain and "." in str(domain) else None,
+                    url=url,
                     extra=extra,
                 )
             )

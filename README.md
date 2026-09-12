@@ -18,6 +18,8 @@ No API keys are required. Optional keys (if you have them):
 cp .env.example .env
 # HIBP_API_KEY=...
 # NUMVERIFY_API_KEY=...
+# TWILIO_ACCOUNT_SID=...  TWILIO_AUTH_TOKEN=...   # optional US CNAM
+# ABSTRACT_PHONE_API_KEY=...
 docker compose up --build
 ```
 
@@ -56,11 +58,13 @@ cd backend && PYTHONPATH=. pytest
 | Holehe | `holehe` | email | Sites that appear to have the email | Rate-limits look like misses |
 | Socialscan | `socialscan` | email, username | Taken vs available on a small platform set | Few sites; no profile URLs |
 | Sherlock | `sherlock-project` | username (or derived) | Profile URLs on a high-signal site subset | Soft-404 false positives possible. `SHERLOCK_FULL=1` for the complete list |
-| Phone metadata | `phonenumbers` + `ignorant` | phone | E.164, country, carrier dataset, line type, a few site checks | Not CNAM / not an address. PhoneInfoga binary is not bundled |
-| theHarvester / CT | crt.sh + HackerTarget (+ CLI if present) | email domain | Public hostnames / emails for that domain | Name-only queries are skipped — use dorks. Current theHarvester git needs Python 3.14; PyPI `0.0.1` is a stub |
-| Search links / dorks | built-in | all | Google, DuckDuckGo, Bing, LinkedIn, Facebook, Whitepages-style queries | Links only; no scraping |
+| Phone metadata | `phonenumbers` + `ignorant` | phone | E.164, country, carrier dataset, line type, site *registration* notes | Not CNAM / not an address. Ignorant hits are not profile URLs. PhoneInfoga binary is not bundled |
+| theHarvester / CT | crt.sh + HackerTarget (+ CLI if present) | company email domain | Public hostnames / emails for that domain | Consumer mailboxes (Gmail, Yahoo, Outlook, …) are skipped — crt.sh noise is not people. Harvested addresses are filtered to the query / same local-part / company domain and capped |
+| Search links / dorks | built-in | all | Google, DuckDuckGo, Bing, LinkedIn, plus labeled reverse-lookup links for phones | Links only; no scraping |
 | HIBP | optional API | email | Breach titles | Skipped without `HIBP_API_KEY` |
 | Numverify | optional API | phone | Carrier/line JSON | Skipped without `NUMVERIFY_API_KEY` |
+| Twilio Lookup | optional API | phone | US CNAM caller name + line-type intelligence | Skipped without `TWILIO_ACCOUNT_SID` + `TWILIO_AUTH_TOKEN`. Empty CNAM is left empty |
+| AbstractAPI phone | optional API | phone | Validation, carrier, location | Skipped without `ABSTRACT_PHONE_API_KEY`. Not a subscriber name |
 
 The in-app **Catalog** page repeats this list from the live backend (`GET /api/catalog`).
 

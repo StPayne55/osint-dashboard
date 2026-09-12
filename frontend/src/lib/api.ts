@@ -70,6 +70,10 @@ export type Report = {
     profiles: number;
     images: number;
     notes: string[];
+    phone_carrier?: string | null;
+    phone_region?: string | null;
+    phone_line_type?: string | null;
+    caller_name?: string | null;
   } | null;
   modules: ModuleStatus[];
   findings: Record<string, Finding[]>;

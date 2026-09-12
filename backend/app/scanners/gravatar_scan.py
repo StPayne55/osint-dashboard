@@ -7,6 +7,7 @@ import httpx
 
 from app.config import USER_AGENT
 from app.models import Finding, Query, QueryType, ScannerResult
+from app.profile_urls import is_concrete_profile_url
 from app.scanners.base import Scanner
 
 
@@ -82,12 +83,13 @@ class GravatarScanner(Scanner):
                 )
             for acc in entry.get("accounts") or []:
                 url = acc.get("url")
+                profile_url = url if is_concrete_profile_url(url if isinstance(url, str) else None) else None
                 findings.append(
                     Finding(
-                        kind="profile",
+                        kind="profile" if profile_url else "note",
                         title=str(acc.get("shortname") or acc.get("domain") or "account"),
                         value=str(acc.get("display") or url or ""),
-                        url=url,
+                        url=profile_url,
                     )
                 )
             for im in entry.get("ims") or []:

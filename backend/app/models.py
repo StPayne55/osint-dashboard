@@ -96,6 +96,10 @@ class IdentitySummary(BaseModel):
     profiles: int = 0
     images: int = 0
     notes: list[str] = Field(default_factory=list)
+    phone_carrier: str | None = None
+    phone_region: str | None = None
+    phone_line_type: str | None = None
+    caller_name: str | None = None
 
 
 class Report(BaseModel):
@@ -112,6 +116,16 @@ class Report(BaseModel):
         "It is not a government or commercial people-search dossier. "
         "Empty modules mean no public hit — not that the person has no accounts."
     )
+
+
+PHONE_HONESTY = (
+    "Free phone scanners report carrier, region, line type, and whether a "
+    "number appears registered on a few public sites. They cannot name the "
+    "subscriber. A caller name (CNAM) only appears if you set Twilio Lookup "
+    "keys — empty CNAM is left empty, never invented. Use the labeled reverse-lookup "
+    "search links (Whitepages, Thatsthem, FastPeopleSearch, TruePeopleSearch, "
+    "Spokeo, 411) for manual follow-up."
+)
 
 
 class ScanAccepted(BaseModel):

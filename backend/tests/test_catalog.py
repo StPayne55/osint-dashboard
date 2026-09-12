@@ -25,6 +25,9 @@ def test_catalog_lists_core_scanners():
         "socialscan",
         "harvester",
         "hibp",
+        "twilio",
+        "abstract_phone",
+        "numverify",
     }:
         assert required in ids
 

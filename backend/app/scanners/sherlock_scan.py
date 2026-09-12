@@ -6,6 +6,7 @@ from typing import Any
 
 from app.config import SHERLOCK_FULL, SHERLOCK_SITE_TIMEOUT, SHERLOCK_TIMEOUT
 from app.models import Finding, Query, QueryType, ScannerResult
+from app.profile_urls import is_concrete_profile_url
 from app.scanners.base import Scanner
 
 PRIORITY_SITES = [
@@ -114,6 +115,7 @@ class SherlockScanner(Scanner):
                 extra={"username": username, "status": row.get("status")},
             )
             for row in raw.get("found", [])
+            if is_concrete_profile_url(row.get("url"))
         ]
         summary = (
             f"{len(findings)} profile(s) for @{username}"

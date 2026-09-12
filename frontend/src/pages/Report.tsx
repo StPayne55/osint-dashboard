@@ -10,16 +10,42 @@ import {
   type ScanEvent,
 } from "../lib/api";
 
+const PHONE_SCANNER_IDS = ["phone", "numverify", "twilio", "abstract_phone"] as const;
+
 const SECTIONS: { id: string; title: string; kinds: Finding["kind"][]; scanners?: string[] }[] = [
   { id: "identity", title: "Identity summary", kinds: [] },
   { id: "emails", title: "Emails", kinds: ["email"] },
-  { id: "phone", title: "Phone", kinds: ["phone", "metadata"], scanners: ["phone", "numverify"] },
+  {
+    id: "phone",
+    title: "Phone",
+    kinds: ["phone", "metadata", "note"],
+    scanners: [...PHONE_SCANNER_IDS],
+  },
   { id: "social", title: "Social profiles", kinds: ["profile"] },
   { id: "images", title: "Images", kinds: ["image"] },
   { id: "usernames", title: "Username candidates", kinds: ["username"] },
   { id: "dorks", title: "Search links / dorks", kinds: ["link"] },
   { id: "notes", title: "Notes", kinds: ["note", "breach"] },
 ];
+
+const PHONE_SECTION_BLURB =
+  "Free scanners give carrier, region, line type, and site registration. A subscriber name needs a CNAM API key (Twilio Lookup) or the manual reverse-lookup links in Search links. Empty CNAM is left empty.";
+
+/** Homepage of a registrable domain (https://instagram.com/) is not a profile. */
+export function isConcreteProfileUrl(url?: string | null): boolean {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url.includes("://") ? url : `https://${url}`);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+    const parts = parsed.pathname.split("/").filter(Boolean);
+    if (parts.length === 0) return false;
+    const home = new Set(["home", "index", "index.html", "index.htm", "login", "signup", "register", "about", "www"]);
+    if (parts.length === 1 && home.has(parts[0].toLowerCase())) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export function ReportPage() {
   const { jobId } = useParams();
@@ -104,6 +130,14 @@ export function ReportPage() {
   }, [jobId]);
 
   const allFindings = useMemo(() => Object.values(findings).flat(), [findings]);
+  const profileFindings = useMemo(
+    () => allFindings.filter((f) => f.kind === "profile" && isConcreteProfileUrl(f.url)),
+    [allFindings],
+  );
+  const phoneMeta = useMemo(
+    () => derivePhoneMeta(findings, report?.identity),
+    [findings, report],
+  );
   const running = modules.some((m) => m.status === "running" || m.status === "queued");
   const done = modules.filter((m) => !["queued", "running"].includes(m.status)).length;
   const pct = modules.length ? Math.round((done / modules.length) * 100) : 0;
@@ -162,7 +196,7 @@ export function ReportPage() {
           <span>Emails</span>
         </div>
         <div className="stat">
-          <b>{uniq(allFindings, "profile").length}</b>
+          <b>{profileFindings.length}</b>
           <span>Profiles</span>
         </div>
         <div className="stat">
@@ -177,6 +211,35 @@ export function ReportPage() {
           <span>Modules done</span>
         </div>
       </div>
+
+      {(phoneMeta.callerName || phoneMeta.carrier || phoneMeta.region || phoneMeta.lineType) && (
+        <div className="identity phone-meta">
+          {phoneMeta.callerName && (
+            <div className="stat">
+              <b>{phoneMeta.callerName}</b>
+              <span>Caller name (CNAM)</span>
+            </div>
+          )}
+          {phoneMeta.carrier && (
+            <div className="stat">
+              <b>{phoneMeta.carrier}</b>
+              <span>Carrier</span>
+            </div>
+          )}
+          {phoneMeta.region && (
+            <div className="stat">
+              <b>{phoneMeta.region}</b>
+              <span>Region</span>
+            </div>
+          )}
+          {phoneMeta.lineType && (
+            <div className="stat">
+              <b>{phoneMeta.lineType}</b>
+              <span>Line type</span>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="layout">
         <aside className="mod-list">
@@ -203,9 +266,16 @@ export function ReportPage() {
 
           {SECTIONS.filter((s) => s.id !== "identity").map((section) => {
             const rows = allFindings.filter((f) => {
+              if (section.id === "social") {
+                return f.kind === "profile" && isConcreteProfileUrl(f.url);
+              }
               if (section.scanners) {
                 const from = section.scanners.flatMap((id) => findings[id] || []);
                 return from.some((x) => x === f) && section.kinds.includes(f.kind);
+              }
+              if (section.id === "notes") {
+                if (!section.kinds.includes(f.kind)) return false;
+                return !PHONE_SCANNER_IDS.some((id) => (findings[id] || []).includes(f));
               }
               return section.kinds.includes(f.kind);
             });
@@ -216,6 +286,9 @@ export function ReportPage() {
                   {section.title}{" "}
                   <span className="meta">{unique.length}</span>
                 </h3>
+                {section.id === "phone" && (
+                  <p className="section-blurb">{PHONE_SECTION_BLURB}</p>
+                )}
                 {section.id === "images" ? (
                   unique.length ? (
                     <div className="images">
@@ -234,8 +307,8 @@ export function ReportPage() {
                       <div className="finding" key={`${f.title}-${f.value}-${i}`}>
                         <div className="title">{f.title}</div>
                         <div className="value">
-                          {f.url ? (
-                            <a href={f.url} target="_blank" rel="noreferrer">
+                          {findingHref(f) ? (
+                            <a href={findingHref(f)!} target="_blank" rel="noreferrer">
                               {f.value || f.url}
                             </a>
                           ) : (
@@ -267,6 +340,44 @@ export function ReportPage() {
       </div>
     </div>
   );
+}
+
+function findingHref(f: Finding): string | null {
+  if (!f.url) return null;
+  if (f.kind === "profile" && !isConcreteProfileUrl(f.url)) return null;
+  return f.url;
+}
+
+function derivePhoneMeta(
+  findings: Record<string, Finding[]>,
+  identity?: Report["identity"],
+) {
+  let carrier = identity?.phone_carrier || "";
+  let region = identity?.phone_region || "";
+  let lineType = identity?.phone_line_type || "";
+  let callerName = identity?.caller_name || "";
+  for (const id of PHONE_SCANNER_IDS) {
+    for (const f of findings[id] || []) {
+      const title = (f.title || "").trim().toLowerCase();
+      const extra = f.extra || {};
+      if (!carrier && (title === "carrier" || title === "carrier (dataset)") && f.value) {
+        carrier = f.value;
+      }
+      if (!region && (title === "region" || title === "location") && f.value) {
+        region = f.value;
+      }
+      if (!lineType && title === "line type" && f.value) {
+        lineType = f.value;
+      }
+      if (!callerName && f.kind === "metadata" && (title === "caller name (cnam)" || title === "caller name")) {
+        callerName = f.value;
+      }
+      if (!carrier && typeof extra.carrier === "string") carrier = extra.carrier;
+      if (!region && typeof extra.region === "string") region = extra.region;
+      if (!lineType && typeof extra.line_type === "string") lineType = extra.line_type;
+    }
+  }
+  return { carrier, region, lineType, callerName };
 }
 
 function uniq(items: Finding[], kind: Finding["kind"]) {

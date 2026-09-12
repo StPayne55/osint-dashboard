@@ -7,6 +7,11 @@ from typing import Any
 import httpx
 
 from app.config import HARVESTER_TIMEOUT, USER_AGENT
+from app.consumer_mail import (
+    HARVEST_EMAIL_CAP,
+    is_consumer_mail_domain,
+    keep_harvested_email,
+)
 from app.models import Finding, Query, QueryType, ScannerResult
 from app.scanners.base import Scanner
 
@@ -24,9 +29,10 @@ class HarvesterScanner(Scanner):
     )
     accepts = [QueryType.email, QueryType.name]
     limitations = (
-        "theHarvester is domain-oriented, not a people-search. A personal name "
-        "without a domain only gets an honest skip plus the dork pack. Free "
-        "sources are noisy and often rate-limited."
+        "theHarvester is domain-oriented, not a people-search. Consumer mailbox "
+        "domains (Gmail, Yahoo, Outlook, …) are skipped entirely — crt.sh noise "
+        "is not a people result. A personal name without a domain only gets an "
+        "honest skip plus the dork pack. Free sources are noisy and often rate-limited."
     )
     timeout = HARVESTER_TIMEOUT
 
@@ -54,6 +60,29 @@ class HarvesterScanner(Scanner):
         if not domain:
             return self._result("skipped", "No domain")
 
+        if is_consumer_mail_domain(domain):
+            findings = [
+                Finding(
+                    kind="note",
+                    title="Domain harvest skipped",
+                    value=(
+                        f"{domain} is a consumer / free-mail provider. Certificate "
+                        "transparency and host-search dumps for that whole domain are "
+                        "unrelated noise (not people who share this inbox). Holehe, "
+                        "Gravatar, Socialscan, and dorks still run on the specific address."
+                    ),
+                )
+            ]
+            if query.email:
+                findings.append(
+                    Finding(kind="email", title="Query email", value=query.email)
+                )
+            return self._result(
+                "skipped",
+                f"Skipped domain harvest for consumer mailbox {domain}",
+                findings=findings,
+            )
+
         crt, hacker, hv = await asyncio.gather(
             self._crtsh(domain),
             self._hackertarget(domain),
@@ -75,9 +104,39 @@ class HarvesterScanner(Scanner):
             if blob.get("error"):
                 notes.append(str(blob["error"]))
 
+        kept = sorted(e for e in emails if keep_harvested_email(e, query.email, domain))
+        truncated = len(kept) > HARVEST_EMAIL_CAP
+        listed = kept[:HARVEST_EMAIL_CAP]
+        dropped_noise = len(emails) - len(kept)
+
         findings: list[Finding] = []
-        for email in sorted(emails):
+        if query.email and query.email.lower() not in {e.lower() for e in listed}:
+            findings.append(Finding(kind="email", title="Query email", value=query.email))
+        for email in listed:
             findings.append(Finding(kind="email", title="Public email", value=email))
+        if truncated:
+            findings.append(
+                Finding(
+                    kind="note",
+                    title="Email list truncated",
+                    value=(
+                        f"Showing {HARVEST_EMAIL_CAP} of {len(kept)} harvested addresses "
+                        f"that match this lookup (same address, same local-part, or @{domain})."
+                    ),
+                )
+            )
+        if dropped_noise:
+            findings.append(
+                Finding(
+                    kind="note",
+                    title="Unrelated harvest dropped",
+                    value=(
+                        f"Dropped {dropped_noise} harvested address(es) that are not "
+                        f"{query.email or 'the query'}, do not share its local-part, "
+                        f"and are not clearly on {domain}."
+                    ),
+                )
+            )
         for host in sorted(hosts)[:80]:
             findings.append(
                 Finding(
@@ -90,7 +149,11 @@ class HarvesterScanner(Scanner):
         for note in notes:
             findings.append(Finding(kind="note", title="Source note", value=note))
 
-        summary = f"{len(emails)} email(s), {len(hosts)} host(s) for {domain}"
+        summary = (
+            f"{len(listed)} email(s) kept"
+            + (f" of {len(kept)}" if truncated else "")
+            + f", {len(hosts)} host(s) for {domain}"
+        )
         return self._result(
             "success",
             summary,

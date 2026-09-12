@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from app.config import SOCIALSCAN_TIMEOUT
 from app.models import Finding, Query, QueryType, ScannerResult
+from app.profile_urls import is_concrete_profile_url
 from app.scanners.base import Scanner
 
 
@@ -85,12 +86,15 @@ class SocialscanScanner(Scanner):
             if not success:
                 continue
             if valid and not available:
+                url = str(link) if is_concrete_profile_url(link if isinstance(link, str) else None) else None
                 findings.append(
                     Finding(
-                        kind="profile",
+                        kind="profile" if url else "note",
                         title=str(platform_name),
-                        value=f"{q} is taken",
-                        url=link,
+                        value=f"{q} is taken on {platform_name} (registration, not a profile URL)"
+                        if not url
+                        else f"{q} is taken",
+                        url=url,
                         extra={"message": message, "query": q},
                     )
                 )
