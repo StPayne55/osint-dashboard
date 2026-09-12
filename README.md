@@ -19,7 +19,6 @@ cp .env.example .env
 # HIBP_API_KEY=...
 # NUMVERIFY_API_KEY=...
 # TWILIO_ACCOUNT_SID=...  TWILIO_AUTH_TOKEN=...   # optional US CNAM
-# ABSTRACT_PHONE_API_KEY=...
 docker compose up --build
 ```
 
@@ -64,9 +63,8 @@ cd backend && PYTHONPATH=. pytest
 | HIBP | optional API | email | Breach titles | Skipped without `HIBP_API_KEY` |
 | Numverify | optional API | phone | Carrier/line JSON | Skipped without `NUMVERIFY_API_KEY` |
 | Twilio Lookup | optional API | phone | US CNAM caller name + line-type intelligence | Skipped without `TWILIO_ACCOUNT_SID` + `TWILIO_AUTH_TOKEN`. Empty CNAM means no caller name on file (common for mobiles), never invented |
-| AbstractAPI phone | optional API | phone | Validation, carrier, location | Skipped without `ABSTRACT_PHONE_API_KEY`. Not a subscriber name |
 
-The in-app **Catalog** page repeats this list from the live backend (`GET /api/catalog`).
+The in-app **Catalog** page repeats this list from the live backend (`GET /api/catalog`). AbstractAPI phone validation is implemented but **not registered** (disabled pending a key) so it does not appear in Catalog or live scan modules.
 
 ## Architecture
 

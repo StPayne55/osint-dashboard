@@ -10,7 +10,7 @@ import {
   type ScanEvent,
 } from "../lib/api";
 
-const PHONE_SCANNER_IDS = ["phone", "numverify", "twilio", "abstract_phone"] as const;
+const PHONE_SCANNER_IDS = ["phone", "numverify", "twilio"] as const;
 
 const SECTIONS: { id: string; title: string; kinds: Finding["kind"][]; scanners?: string[] }[] = [
   { id: "identity", title: "Identity summary", kinds: [] },

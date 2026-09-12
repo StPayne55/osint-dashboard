@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from app.scanners.abstract_phone_scan import AbstractPhoneScanner
 from app.scanners.base import Scanner
 from app.scanners.dorks_scan import DorkScanner
 from app.scanners.email_intel import EmailIntelScanner
@@ -14,6 +13,10 @@ from app.scanners.sherlock_scan import SherlockScanner
 from app.scanners.socialscan_scan import SocialscanScanner
 from app.scanners.twilio_scan import TwilioLookupScanner
 from app.scanners.usernames import UsernameCandidateScanner
+
+# AbstractPhoneScanner stays in abstract_phone_scan.py but is not registered.
+# It is disabled pending an AbstractAPI key so Catalog and live scans do not
+# show a skipped-without-key module.
 
 
 def all_scanners() -> list[Scanner]:
@@ -30,5 +33,4 @@ def all_scanners() -> list[Scanner]:
         HibpScanner(),
         NumverifyScanner(),
         TwilioLookupScanner(),
-        AbstractPhoneScanner(),
     ]

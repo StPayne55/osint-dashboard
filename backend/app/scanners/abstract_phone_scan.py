@@ -8,6 +8,8 @@ from app.config import ABSTRACT_PHONE_API_KEY, USER_AGENT
 from app.models import Finding, Query, QueryType, ScannerResult
 from app.scanners.base import Scanner
 
+# Not registered in all_scanners() — disabled pending ABSTRACT_PHONE_API_KEY.
+
 
 class AbstractPhoneScanner(Scanner):
     id = "abstract_phone"
