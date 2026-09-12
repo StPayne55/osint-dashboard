@@ -1,4 +1,5 @@
 import asyncio
+import threading
 from types import SimpleNamespace
 
 from app.detect import build_query
@@ -127,3 +128,35 @@ def test_username_jobs_plan_maigret_phone_does_not():
     phone = build_query("+1 415 555 2671")
     planned_phone = [s.id for s in all_scanners() if s.applicable(phone) or s.optional_key]
     assert "maigret" not in planned_phone
+
+
+def test_search_loads_database_off_loop_and_awaits_maigret(monkeypatch):
+    """Maigret search() is a real coroutine; only sync DB load is off-loop."""
+    scanner = MaigretScanner()
+    db_thread: list[int] = []
+    loop_thread = {"id": 0}
+
+    class FakeDB:
+        def ranked_sites_dict(self, **_k):
+            return {"GitHub": _claimed("https://github.com/torvalds")}
+
+    def fake_db(_cls):
+        db_thread.append(threading.get_ident())
+        return FakeDB()
+
+    async def fake_search(**_k):
+        assert threading.get_ident() == loop_thread["id"]
+        return {
+            "GitHub": _claimed("https://github.com/torvalds"),
+        }
+
+    monkeypatch.setattr("app.scanners.maigret_scan._database", fake_db)
+
+    async def go():
+        loop_thread["id"] = threading.get_ident()
+        return await scanner._search("torvalds", (fake_search, object()))
+
+    raw = asyncio.run(go())
+    assert raw["username"] == "torvalds"
+    assert raw["checked"] == 1
+    assert db_thread and all(tid != loop_thread["id"] for tid in db_thread)

@@ -191,7 +191,8 @@ class MaigretScanner(Scanner):
 
     async def _search(self, username: str, loaded: tuple[Any, Any]) -> dict[str, Any]:
         maigret_search, database_cls = loaded
-        db = _database(database_cls)
+        # load_from_path is sync file I/O; search() itself is a real aiohttp coroutine.
+        db = await asyncio.to_thread(_database, database_cls)
         top, subset, excluded = _site_limits()
         site_dict = db.ranked_sites_dict(
             top=top,
