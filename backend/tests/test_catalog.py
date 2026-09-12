@@ -30,6 +30,7 @@ def test_catalog_lists_core_scanners():
         "twilio",
         "numverify",
         "spiderfoot",
+        "maigret",
     }:
         assert required in ids
     assert "abstract_phone" not in ids
@@ -62,4 +63,5 @@ def test_start_scan_and_poll():
     assert body["query"]["email"] == "example@example.com"
     assert "honesty" in body
     assert "spiderfoot" in r.json()["scanners"]
+    assert "maigret" in r.json()["scanners"]
     assert "abstract_phone" not in r.json()["scanners"]

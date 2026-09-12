@@ -10,6 +10,7 @@ beautifulsoup4>=4.12.0
 trio>=0.26.0
 holehe>=1.61
 sherlock-project>=0.15.0
+maigret>=0.4.4
 socialscan>=2.0.0
 ignorant>=1.2
 # theHarvester: PyPI 0.0.1 is an empty stub; current git requires Python 3.14

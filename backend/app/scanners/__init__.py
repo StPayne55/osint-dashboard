@@ -7,6 +7,7 @@ from app.scanners.gravatar_scan import GravatarScanner
 from app.scanners.harvester_scan import HarvesterScanner
 from app.scanners.hibp_scan import HibpScanner
 from app.scanners.holehe_scan import HoleheScanner
+from app.scanners.maigret_scan import MaigretScanner
 from app.scanners.numverify_scan import NumverifyScanner
 from app.scanners.phone_scan import PhoneScanner
 from app.scanners.sherlock_scan import SherlockScanner
@@ -28,6 +29,7 @@ def all_scanners() -> list[Scanner]:
         HoleheScanner(),
         SocialscanScanner(),
         SherlockScanner(),
+        MaigretScanner(),
         SpiderFootScanner(),
         PhoneScanner(),
         HarvesterScanner(),

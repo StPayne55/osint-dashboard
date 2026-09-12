@@ -65,9 +65,9 @@ export function Home() {
         <h2>People lookup from open-source OSINT — not a secret dossier.</h2>
         <p className="lede">
           Enter a name, email, phone, or username. Modules such as Holehe, Sherlock,
-          SpiderFoot (open source), Gravatar, and phone metadata run in parallel
-          and stream into a single report. Empty results stay empty. Nothing is
-          written to disk by default.
+          Maigret, SpiderFoot (open source), Gravatar, and phone metadata run in
+          parallel and stream into a single report. Empty results stay empty.
+          Nothing is written to disk by default.
         </p>
       </section>
 
@@ -131,7 +131,7 @@ export function Home() {
           <h3>What this can do</h3>
           <ul className="limits">
             <li>See which public sites appear to have an email or username.</li>
-            <li>Pull extra social/account profile URLs from open-source SpiderFoot (not HX).</li>
+            <li>Pull extra social/account profile URLs from Maigret and open-source SpiderFoot (not HX).</li>
             <li>Pull a Gravatar photo and self-published profile if one exists.</li>
             <li>Parse a phone into country, carrier dataset, and line type.</li>
             <li>Hand you Google / DuckDuckGo / LinkedIn dorks for manual follow-up.</li>
