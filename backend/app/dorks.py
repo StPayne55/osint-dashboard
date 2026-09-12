@@ -21,6 +21,55 @@ def _bing(q: str) -> str:
     return f"https://www.bing.com/search?q={quote_plus(q)}"
 
 
+def _linkedin_people_url(keywords: str) -> str:
+    return f"https://www.linkedin.com/search/results/people/?keywords={quote_plus(keywords)}"
+
+
+def _linkedin_terms(query: Query) -> list[str]:
+    """Email, local-part, and a couple of slug hints for LinkedIn profile dorks."""
+    terms: list[str] = []
+    seen: set[str] = set()
+
+    def add(value: str | None) -> None:
+        cleaned = (value or "").strip().lstrip("@")
+        if not cleaned:
+            return
+        key = cleaned.lower()
+        if key in seen:
+            return
+        seen.add(key)
+        terms.append(cleaned)
+
+    if query.email:
+        add(query.email)
+        add(query.email.split("@", 1)[0])
+    if query.username:
+        add(query.username)
+    # Compact / name-slug candidates (already derived; do not invent new ones).
+    for candidate in query.username_candidates:
+        if len(terms) >= 4:
+            break
+        add(candidate)
+    return terms
+
+
+def _linkedin_profile_query(terms: list[str], path_user: str | None = None) -> str:
+    quoted = [t for t in terms if t]
+    if not quoted and not path_user:
+        return "site:linkedin.com/in"
+    # Parentheses keep site: scoped across OR (bare OR would leak to the open web).
+    if quoted:
+        inner = " OR ".join(f'"{t}"' for t in quoted)
+        dork = f"site:linkedin.com/in ({inner})" if len(quoted) > 1 else f'site:linkedin.com/in "{quoted[0]}"'
+    else:
+        dork = "site:linkedin.com/in"
+    if path_user:
+        slug = re.sub(r"[^A-Za-z0-9_-]", "", path_user)
+        if slug:
+            dork = f"{dork} OR site:linkedin.com/in/{slug}"
+    return dork
+
+
 def build_dorks(query: Query) -> list[Finding]:
     links: list[Finding] = []
 
@@ -36,16 +85,27 @@ def build_dorks(query: Query) -> list[Finding]:
             )
         )
 
+    def add_direct(title: str, value: str, url: str, extra: dict | None = None) -> None:
+        links.append(
+            Finding(
+                kind="link",
+                title=title,
+                value=value,
+                url=url,
+                extra=extra or {"engine": "linkedin", "manual": True},
+            )
+        )
+
     raw = query.raw
     if query.type == QueryType.email and query.email:
         email = query.email
         domain = query.domain or email.split("@", 1)[1]
+        add("LinkedIn — profile search", _linkedin_profile_query(_linkedin_terms(query)))
         add("Google — exact email", f'"{email}"')
         add("DuckDuckGo — exact email", f'"{email}"', "ddg")
         add("Bing — exact email", f'"{email}"', "bing")
         add("Google — email + profile", f'"{email}" (profile OR bio OR about)')
         add("Google — email filetype leaks", f'"{email}" (filetype:pdf OR filetype:xlsx OR filetype:csv)')
-        add("Google — site:linkedin", f'site:linkedin.com/in "{email}" OR "{query.username}"')
         add("Google — GitHub", f'site:github.com "{email}"')
         add("Google — Gravatar / WordPress", f'site:gravatar.com OR site:wordpress.com "{email}"')
         add("Hunter-style domain staff pages", f'site:{domain} ("email" OR contact) "{query.username}"')
@@ -98,11 +158,22 @@ def build_dorks(query: Query) -> list[Finding]:
         add("Google — Whitepages-style owner query", f'"{intl or phone}" phone owner')
     elif query.type == QueryType.name and query.name:
         name = query.name
+        name_terms = [name]
+        # firstlast / first.last slugs already live on the query — cheap vanity hint.
+        for candidate in query.username_candidates:
+            if candidate.lower() != name.lower() and " " not in candidate:
+                name_terms.append(candidate)
+                break
+        add("LinkedIn — profile search", _linkedin_profile_query(name_terms))
+        add_direct(
+            "LinkedIn — people search (manual)",
+            f'keywords="{name}" (LinkedIn login may be required)',
+            _linkedin_people_url(name),
+        )
         add("Google — quoted name", f'"{name}"')
         add("DuckDuckGo — name", f'"{name}"', "ddg")
         add("Bing — name", f'"{name}"', "bing")
         add("Google — name + email", f'"{name}" ("@" OR email OR contact)')
-        add("LinkedIn people", f'site:linkedin.com/in "{name}"')
         add("Facebook people", f'site:facebook.com "{name}"')
         add("Twitter / X", f'site:x.com "{name}" OR site:twitter.com "{name}"')
         add("News / press", f'"{name}" (interview OR biography OR "is a")')
@@ -112,11 +183,11 @@ def build_dorks(query: Query) -> list[Finding]:
         add("BeenVerified is paid — skip; use this Google instead", f'"{name}" "obituary" OR "county" OR voter')
     else:
         user = query.username or raw.lstrip("@")
+        add("LinkedIn — profile search", _linkedin_profile_query([user], path_user=user))
         add("Google — exact username", f'"{user}"')
         add("DuckDuckGo — username", f'"{user}"', "ddg")
         add("Bing — username", f'"{user}"', "bing")
         add("Google — username + social", f'"{user}" (twitter OR instagram OR github OR telegram)')
-        add("LinkedIn", f'site:linkedin.com "{user}"')
         add("GitHub users", f'site:github.com "{user}"')
         add("Reddit", f'site:reddit.com/user "{user}" OR site:reddit.com "{user}"')
         add("TikTok", f'site:tiktok.com "@{user}"')

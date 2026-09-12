@@ -794,6 +794,15 @@ a.btn:hover {
   font-size: 12px;
 }
 
+.finding.linkedin {
+  border-bottom-color: rgba(0, 240, 255, 0.28);
+}
+
+.finding.linkedin .title {
+  color: var(--cyan);
+  font-weight: 600;
+}
+
 .finding .value {
   overflow-wrap: anywhere;
 }

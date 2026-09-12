@@ -10,8 +10,9 @@ class DorkScanner(Scanner):
     name = "Search links / dorks"
     tool = "built-in"
     description = (
-        "Generates Google, DuckDuckGo, Bing, LinkedIn, Facebook, and public-records "
-        "style queries. Opens in the user's browser — this module never scrapes those engines."
+        "Generates Google, DuckDuckGo, Bing, Facebook, and public-records style queries, "
+        "plus dedicated LinkedIn profile / people-search links. Opens in the user's browser "
+        "— this module never scrapes those engines or LinkedIn."
     )
     accepts = [QueryType.email, QueryType.phone, QueryType.username, QueryType.name]
     limitations = (
