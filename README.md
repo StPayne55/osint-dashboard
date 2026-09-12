@@ -19,6 +19,7 @@ cp .env.example .env
 # HIBP_API_KEY=...
 # NUMVERIFY_API_KEY=...
 # TWILIO_ACCOUNT_SID=...  TWILIO_AUTH_TOKEN=...   # optional US CNAM
+# PDL_API_KEY=...                                 # optional People Data Labs enrichment
 docker compose up --build
 ```
 
@@ -64,6 +65,7 @@ cd ../spiderfoot-runner && PYTHONPATH=. pytest
 | theHarvester / CT | crt.sh + HackerTarget (+ CLI if present) | company email domain | Public hostnames / emails for that domain | Consumer mailboxes (Gmail, Yahoo, Outlook, …) are skipped — crt.sh noise is not people. Harvested addresses are filtered to the query / same local-part / company domain and capped |
 | Search links / dorks | built-in | all | Google, DuckDuckGo, Bing, dedicated LinkedIn profile/people-search links (manual; login may be required), plus labeled reverse-lookup links for phones | Links only; no LinkedIn scraping or API |
 | HIBP | optional API | email | Breach titles | Skipped without `HIBP_API_KEY` |
+| People Data Labs | optional API (`GET https://api.peopledatalabs.com/v5/person/enrich`) | email | Public-safe name, job title, employer, city/region, LinkedIn and other profile URLs when PDL returns them | Skipped without `PDL_API_KEY`. v1 is email-only. No emails, phones, birth dates, or street addresses are stored or shown. Missing fields stay empty |
 | Numverify | optional API | phone | Carrier/line JSON | Skipped without `NUMVERIFY_API_KEY` |
 | Twilio Lookup | optional API | phone | US CNAM caller name + line-type intelligence | Skipped without `TWILIO_ACCOUNT_SID` + `TWILIO_AUTH_TOKEN`. Empty CNAM means no caller name on file (common for mobiles), never invented |
 
@@ -135,7 +137,7 @@ A single small instance cannot run Holehe, Socialscan, Sherlock, Maigret, and Sp
 | `SPIDERFOOT_MAX_THREADS` | `8` on the runner | `sf.py -max-threads`; override if the Starter box is tight |
 | `SHERLOCK_FULL` | unset | Sherlock stays on the high-signal subset unless you set `1` |
 
-Lightweight modules (username candidates, MX, Gravatar, dorks, Twilio, HIBP, …) still run in parallel. A heavy scanner stays **queued** on the module rail until it acquires the slot, then flips to **running**. Holehe and SpiderFoot keep any profile hits they already collected if the wall clock fires.
+Lightweight modules (username candidates, MX, Gravatar, dorks, Twilio, HIBP, PDL, …) still run in parallel. A heavy scanner stays **queued** on the module rail until it acquires the slot, then flips to **running**. Holehe and SpiderFoot keep any profile hits they already collected if the wall clock fires.
 
 ## Architecture
 

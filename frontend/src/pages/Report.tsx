@@ -314,7 +314,10 @@ export function ReportPage() {
                         className={findingClassName(f, section.id)}
                         key={`${f.title}-${f.value}-${i}`}
                       >
-                        <div className="title">{f.title}</div>
+                        <div className="title">
+                          {f.title}
+                          {f.extra?.source === "pdl" ? <span className="meta"> · PDL</span> : null}
+                        </div>
                         <div className="value">
                           {findingHref(f) ? (
                             <a href={findingHref(f)!} target="_blank" rel="noreferrer">

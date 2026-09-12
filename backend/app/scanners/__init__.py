@@ -9,6 +9,7 @@ from app.scanners.hibp_scan import HibpScanner
 from app.scanners.holehe_scan import HoleheScanner
 from app.scanners.maigret_scan import MaigretScanner
 from app.scanners.numverify_scan import NumverifyScanner
+from app.scanners.pdl_scan import PdlScanner
 from app.scanners.phone_scan import PhoneScanner
 from app.scanners.sherlock_scan import SherlockScanner
 from app.scanners.socialscan_scan import SocialscanScanner
@@ -35,6 +36,7 @@ def all_scanners() -> list[Scanner]:
         HarvesterScanner(),
         DorkScanner(),
         HibpScanner(),
+        PdlScanner(),
         NumverifyScanner(),
         TwilioLookupScanner(),
     ]
