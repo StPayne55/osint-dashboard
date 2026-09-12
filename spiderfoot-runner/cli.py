@@ -161,6 +161,45 @@ def abort_grace_seconds() -> float:
         return 4.0
 
 
+def persistent_cache_dir() -> Path:
+    """Keep WhatsMyName + distrust cache outside the per-scan temp HOME.
+
+    Each scan isolates SPIDERFOOT_DATA (the SQLite DB) under a TemporaryDirectory.
+    Without SPIDERFOOT_CACHE, v4 also stores cacheGet/cachePut there, so every
+    request is a cold 715-site distrust sweep. A stable cache dir next to
+    sf.py survives for the life of the Starter instance.
+    """
+    raw = (os.getenv("SPIDERFOOT_CACHE") or "").strip()
+    path = Path(raw) if raw else (sf_home() / "cache")
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def seed_scan_env(env: dict[str, str]) -> dict[str, str]:
+    """Apply Account Finder knobs and a persistent cache for this sf.py child."""
+    env.setdefault("SPIDERFOOT_SKIP_DISTRUST", "1")
+    env.setdefault("SPIDERFOOT_ACCOUNTS_MAX_SITES", "120")
+    cache = persistent_cache_dir()
+    env["SPIDERFOOT_CACHE"] = str(cache)
+    bundled = sf_home() / "data" / "wmn-data.json"
+    priority = sf_home() / "data" / "wmn-priority.json"
+    if bundled.is_file():
+        env.setdefault("SPIDERFOOT_WMN_JSON", str(bundled))
+    elif priority.is_file():
+        env.setdefault("SPIDERFOOT_WMN_JSON", str(priority))
+    # Pre-bake empty distrust state so an accidental skip-off still
+    # does not re-sweep 715 sites on a cold cache.
+    try:
+        sys.path.insert(0, str(sf_home()))
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "docker"))
+        from accounts_tune import bake_spiderfoot_cache
+
+        bake_spiderfoot_cache(cache)
+    except Exception as exc:
+        log.debug("Could not pre-bake SpiderFoot cache: %s", exc)
+    return env
+
+
 def build_command(target: str, script: Path, modules: list[str]) -> list[str]:
     threads = max_threads()
     return [
@@ -208,6 +247,7 @@ def run_spiderfoot(target: str, modules: list[str] | None = None, timeout: int =
         # Isolate the scan DB so we can find it after a timeout. sf.py v4.0
         # writes {SPIDERFOOT_DATA or $HOME/.spiderfoot}/spiderfoot.db.
         env["SPIDERFOOT_DATA"] = str(data_dir)
+        seed_scan_env(env)
         env.setdefault("PYTHONUNBUFFERED", "1")
         proc = subprocess.Popen(
             cmd,

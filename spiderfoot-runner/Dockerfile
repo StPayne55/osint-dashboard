@@ -6,6 +6,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     SPIDERFOOT_HOME=/opt/spiderfoot \
     SPIDERFOOT_MAX_THREADS=8 \
+    SPIDERFOOT_CACHE=/opt/spiderfoot/cache \
+    SPIDERFOOT_SKIP_DISTRUST=1 \
+    SPIDERFOOT_ACCOUNTS_MAX_SITES=120 \
+    SPIDERFOOT_WMN_JSON=/opt/spiderfoot/data/wmn-data.json \
     PORT=10000
 
 RUN apt-get update \
@@ -13,7 +17,7 @@ RUN apt-get update \
         wget ca-certificates gcc g++ \
         libxml2 libxslt1.1 libxml2-dev libxslt1-dev zlib1g-dev
 
-COPY docker/spiderfoot-requirements.txt docker/patch_spiderfoot.py docker/install_spiderfoot.sh /tmp/sf-install/
+COPY docker/spiderfoot-requirements.txt docker/patch_spiderfoot.py docker/accounts_tune.py docker/wmn-priority.json docker/install_spiderfoot.sh /tmp/sf-install/
 RUN chmod +x /tmp/sf-install/install_spiderfoot.sh \
     && /tmp/sf-install/install_spiderfoot.sh \
          /tmp/sf-install/spiderfoot-requirements.txt \

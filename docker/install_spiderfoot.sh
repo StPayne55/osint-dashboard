@@ -27,6 +27,27 @@ python3 -m venv "$DEST/.venv"
 "$DEST/.venv/bin/pip" install --no-cache-dir --upgrade pip
 "$DEST/.venv/bin/pip" install --no-cache-dir -r "$REQS"
 
+# Bundle WhatsMyName so Account Finder does not fetch GitHub raw at scan time.
+# The high-signal slice (wmn-priority.json) is copied by the patch script even
+# if this download fails.
+mkdir -p "$DEST/data" "$DEST/cache"
+if wget -q -O "$DEST/data/wmn-data.json" \
+  "https://raw.githubusercontent.com/WebBreacher/WhatsMyName/main/wmn-data.json"; then
+  echo "bundled WhatsMyName wmn-data.json"
+else
+  echo "WARNING: could not download wmn-data.json; using wmn-priority.json fallback" >&2
+  rm -f "$DEST/data/wmn-data.json"
+fi
+
+# Copy accounts_tune.py / wmn-priority.json from the same dir as the patch.
+PATCH_DIR="$(CDPATH= cd -- "$(dirname "$PATCH")" && pwd)"
+if [ -f "$PATCH_DIR/accounts_tune.py" ]; then
+  cp "$PATCH_DIR/accounts_tune.py" "$DEST/accounts_tune.py"
+fi
+if [ -f "$PATCH_DIR/wmn-priority.json" ]; then
+  cp "$PATCH_DIR/wmn-priority.json" "$DEST/data/wmn-priority.json"
+fi
+
 python3 "$PATCH" "$DEST"
 
 # CLI smoke: module list must load without importing the app venv.

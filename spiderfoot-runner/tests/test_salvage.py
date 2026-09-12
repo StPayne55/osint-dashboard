@@ -2,6 +2,7 @@ import sqlite3
 import subprocess
 from pathlib import Path
 
+import accounts_tune
 import cli
 from salvage import (
     abort_scan,
@@ -162,6 +163,58 @@ def test_merge_events_dedups():
         a,
         {"type": "USERNAME", "data": "y", "module": "sfp"},
     ]
+
+
+def test_seed_scan_env_persists_cache_and_skip(monkeypatch, tmp_path):
+    home = tmp_path / "sf"
+    home.mkdir()
+    (home / "sf.py").write_text("# fake\n", encoding="utf-8")
+    cache = tmp_path / "cache"
+    monkeypatch.setenv("SPIDERFOOT_HOME", str(home))
+    monkeypatch.setenv("SPIDERFOOT_CACHE", str(cache))
+    monkeypatch.delenv("SPIDERFOOT_SKIP_DISTRUST", raising=False)
+    monkeypatch.delenv("SPIDERFOOT_ACCOUNTS_MAX_SITES", raising=False)
+    env = cli.seed_scan_env({})
+    assert env["SPIDERFOOT_SKIP_DISTRUST"] == "1"
+    assert env["SPIDERFOOT_ACCOUNTS_MAX_SITES"] == "120"
+    assert env["SPIDERFOOT_CACHE"] == str(cache)
+    state = cache / accounts_tune.cache_filename(accounts_tune.DISTRUST_CACHE_LABEL)
+    assert state.is_file()
+    assert state.read_text(encoding="utf-8") == "None"
+
+
+def test_timeout_sets_persistent_cache_on_child_env(monkeypatch, tmp_path):
+    home = tmp_path / "sf"
+    home.mkdir()
+    (home / "sf.py").write_text("# fake\n", encoding="utf-8")
+    cache = tmp_path / "sf-cache"
+    monkeypatch.setenv("SPIDERFOOT_HOME", str(home))
+    monkeypatch.setenv("SPIDERFOOT_CACHE", str(cache))
+    monkeypatch.setenv("SPIDERFOOT_ABORT_GRACE", "1")
+    monkeypatch.setattr(cli.os, "killpg", lambda *_a, **_k: None)
+    seen: dict = {}
+
+    class Proc:
+        pid = 4243
+        returncode = 0
+
+        def communicate(self, timeout=None):
+            return "[]", ""
+
+        def poll(self):
+            return 0
+
+    def fake_popen(_cmd, **kwargs):
+        seen["env"] = kwargs.get("env") or {}
+        return Proc()
+
+    monkeypatch.setattr(cli.subprocess, "Popen", fake_popen)
+    result = cli.run_spiderfoot("stpayne55", modules=["sfp_accounts"], timeout=10)
+    assert result["status"] == "ok"
+    assert seen["env"]["SPIDERFOOT_CACHE"] == str(cache)
+    assert seen["env"]["SPIDERFOOT_SKIP_DISTRUST"] == "1"
+    assert seen["env"]["SPIDERFOOT_DATA"] != seen["env"]["SPIDERFOOT_CACHE"]
+    assert seen["env"]["HOME"] != seen["env"]["SPIDERFOOT_CACHE"]
 
 
 def test_build_command_default_threads_is_8(monkeypatch, tmp_path):

@@ -1,0 +1,4 @@
+sfp_accounts_v4.py is SpiderFoot OSS v4.0 Account Finder
+(https://github.com/smicallef/spiderfoot/blob/v4.0/modules/sfp_accounts.py)
+vendored so patch tests do not need a network fetch. GPL-2.0, same as
+the image install. Do not edit the fixture; refresh it from the v4.0 tag.
