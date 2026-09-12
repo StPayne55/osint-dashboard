@@ -31,6 +31,9 @@ const SECTIONS: { id: string; title: string; kinds: Finding["kind"][]; scanners?
 const PHONE_SECTION_BLURB =
   "Free scanners give carrier, region, line type, and site registration. A subscriber name needs a CNAM API key (Twilio Lookup) or the manual reverse-lookup links in Search links. No caller name on file means CNAM was empty (common for mobile numbers) — not an error.";
 
+const DORKS_SECTION_BLURB =
+  "LinkedIn rows sit at the top for name, email, and username lookups. They open a Google profile dork or LinkedIn people search in your browser (login may be required). This desk never scrapes LinkedIn.";
+
 /** Homepage of a registrable domain (https://instagram.com/) is not a profile. */
 export function isConcreteProfileUrl(url?: string | null): boolean {
   if (!url) return false;
@@ -279,7 +282,7 @@ export function ReportPage() {
               }
               return section.kinds.includes(f.kind);
             });
-            const unique = dedupe(rows);
+            const unique = section.id === "dorks" ? pinLinkedInFirst(dedupe(rows)) : dedupe(rows);
             return (
               <section className="section" key={section.id} id={section.id}>
                 <h3>
@@ -288,6 +291,9 @@ export function ReportPage() {
                 </h3>
                 {section.id === "phone" && (
                   <p className="section-blurb">{PHONE_SECTION_BLURB}</p>
+                )}
+                {section.id === "dorks" && (
+                  <p className="section-blurb">{DORKS_SECTION_BLURB}</p>
                 )}
                 {section.id === "images" ? (
                   unique.length ? (
@@ -304,7 +310,10 @@ export function ReportPage() {
                 ) : unique.length ? (
                   <div className="findings">
                     {unique.map((f, i) => (
-                      <div className="finding" key={`${f.title}-${f.value}-${i}`}>
+                      <div
+                        className={findingClassName(f, section.id)}
+                        key={`${f.title}-${f.value}-${i}`}
+                      >
                         <div className="title">{f.title}</div>
                         <div className="value">
                           {findingHref(f) ? (
@@ -340,6 +349,18 @@ export function ReportPage() {
       </div>
     </div>
   );
+}
+
+function isLinkedInFinding(f: Finding): boolean {
+  return (f.title || "").toLowerCase().startsWith("linkedin");
+}
+
+function pinLinkedInFirst(items: Finding[]): Finding[] {
+  return [...items].sort((a, b) => Number(isLinkedInFinding(b)) - Number(isLinkedInFinding(a)));
+}
+
+function findingClassName(f: Finding, sectionId: string): string {
+  return isLinkedInFinding(f) && sectionId === "dorks" ? "finding linkedin" : "finding";
 }
 
 function findingHref(f: Finding): string | null {
