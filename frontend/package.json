@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "test:photos": "node --experimental-strip-types scripts/photos_test.ts",
+    "test:trestle": "node --experimental-strip-types scripts/trestle_test.ts",
     "preview": "vite preview"
   },
   "dependencies": {

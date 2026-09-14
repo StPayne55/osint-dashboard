@@ -1,0 +1,150 @@
+import assert from "node:assert/strict";
+import type { Finding } from "../src/lib/api.ts";
+import {
+  addressDisplayFields,
+  formatTrestleField,
+  groupTrestlePhoneFindings,
+  isTrestleCurrentAddress,
+  ownerDisplayFields,
+} from "../src/lib/trestle.ts";
+
+function finding(partial: Partial<Finding> & Pick<Finding, "title" | "value">): Finding {
+  return {
+    kind: "note",
+    ...partial,
+  };
+}
+
+const ownerA = finding({
+  title: "Name",
+  value: "S Fraileigh",
+  extra: {
+    source: "trestle",
+    finding_type: "trestle_owner",
+    owner_index: 0,
+    owner: {
+      age_range: "35-39",
+      gender: "Male",
+      type: "Person",
+      link_to_phone_start_date: "2015-03-01",
+    },
+  },
+});
+
+const current = finding({
+  title: "Current address",
+  value: "200 New St Apt 4, Detroit, MI 48201",
+  extra: {
+    source: "trestle",
+    finding_type: "trestle_address",
+    owner_index: 0,
+    owner_name: "S Fraileigh",
+    is_current: true,
+    fields: {
+      location_type: "Address",
+      street_line_1: "200 New St",
+      street_line_2: "Apt 4",
+      city: "Detroit",
+      postal_code: "48201",
+      zip4: "48201-1234",
+      state_code: "MI",
+      country_code: "US",
+      lat_long: { latitude: 42.3314, longitude: -83.0458, accuracy: "Rooftop" },
+      delivery_point: "MultiUnit",
+      link_to_person_start_date: "2021-09-15",
+      id: "Location.new",
+    },
+  },
+});
+
+const older = finding({
+  title: "Address",
+  value: "100 Old St, Warren, MI 48088",
+  extra: {
+    source: "trestle",
+    finding_type: "trestle_address",
+    owner_index: 0,
+    is_current: false,
+    fields: {
+      street_line_1: "100 Old St",
+      city: "Warren",
+      state_code: "MI",
+      postal_code: "48088",
+      link_to_person_start_date: "2012-04-01",
+    },
+  },
+});
+
+const ownerB = finding({
+  title: "Name",
+  value: "A Fraileigh",
+  extra: {
+    source: "trestle",
+    finding_type: "trestle_owner",
+    owner_index: 1,
+    owner: { gender: "Female" },
+  },
+});
+
+const ownerBAddress = finding({
+  title: "Current address",
+  value: "50 Other Rd, Sterling Heights, MI 48310",
+  extra: {
+    source: "trestle",
+    finding_type: "trestle_address",
+    owner_index: 1,
+    is_current: true,
+    fields: { street_line_1: "50 Other Rd", city: "Sterling Heights", state_code: "MI" },
+  },
+});
+
+const lineType = finding({
+  kind: "metadata",
+  title: "Line type",
+  value: "Mobile",
+  extra: { source: "trestle" },
+});
+
+const grouped = groupTrestlePhoneFindings([lineType, older, current, ownerA, ownerB, ownerBAddress]);
+assert.equal(grouped.leftover.length, 1);
+assert.equal(grouped.leftover[0].title, "Line type");
+assert.equal(grouped.owners.length, 2);
+assert.equal(grouped.owners[0].name, "S Fraileigh");
+assert.equal(grouped.owners[0].addresses[0].value, current.value);
+assert.equal(isTrestleCurrentAddress(grouped.owners[0].addresses[0]), true);
+assert.equal(isTrestleCurrentAddress(grouped.owners[0].addresses[1]), false);
+assert.equal(grouped.owners[1].name, "A Fraileigh");
+
+const ownerChips = ownerDisplayFields(grouped.owners[0].ownerFields);
+assert.deepEqual(
+  ownerChips.map((row) => row.key),
+  ["age_range", "gender", "type", "link_to_phone_start_date"],
+);
+assert.ok(!ownerChips.some((row) => row.key === "firstname"));
+
+const currentFields = addressDisplayFields(current.extra?.fields as Record<string, unknown>);
+assert.deepEqual(
+  currentFields.map((row) => row.key),
+  [
+    "location_type",
+    "street_line_1",
+    "street_line_2",
+    "city",
+    "postal_code",
+    "zip4",
+    "state_code",
+    "country_code",
+    "lat_long",
+    "delivery_point",
+    "link_to_person_start_date",
+    "id",
+  ],
+);
+assert.equal(formatTrestleField({ latitude: 42.3314, longitude: -83.0458, accuracy: "Rooftop" }), "42.3314, -83.0458 (Rooftop)");
+
+const sparse = addressDisplayFields({ city: "Detroit", invented: "" });
+assert.deepEqual(sparse, [{ key: "city", value: "Detroit" }]);
+assert.equal(formatTrestleField(null), "");
+assert.equal(formatTrestleField(""), "");
+
+console.log("trestle_test ok");

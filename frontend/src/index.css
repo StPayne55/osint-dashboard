@@ -807,6 +807,174 @@ a.btn:hover {
   overflow-wrap: anywhere;
 }
 
+.trestle-owner {
+  border: 1px solid var(--line);
+  background: var(--glass-strong);
+  padding: 12px;
+  box-shadow: 0 0 18px rgba(0, 240, 255, 0.06);
+}
+
+.trestle-owner-head {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.trestle-owner-head .title {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.trestle-owner-name {
+  color: var(--acid);
+  font-family: var(--display);
+  font-size: 18px;
+  letter-spacing: 0.04em;
+  text-shadow: 0 0 12px rgba(200, 255, 0, 0.28);
+}
+
+.trestle-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 8px;
+}
+
+.trestle-chip {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 1px;
+  border: 1px solid rgba(177, 76, 255, 0.35);
+  background: var(--purple-dim);
+  padding: 4px 8px;
+  min-width: 88px;
+}
+
+.trestle-chip-label {
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.trestle-chip b {
+  color: var(--cyan);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.trestle-alts {
+  margin: 4px 0 8px;
+}
+
+.trestle-alt {
+  border-bottom: 0;
+  padding: 4px 0;
+}
+
+.trestle-addresses {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.trestle-address {
+  border: 1px solid rgba(0, 240, 255, 0.16);
+  background: rgba(0, 0, 0, 0.28);
+}
+
+.trestle-address.current {
+  border-color: rgba(200, 255, 0, 0.45);
+  box-shadow: 0 0 14px rgba(200, 255, 0, 0.08);
+}
+
+.trestle-address > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.trestle-address > summary::-webkit-details-marker {
+  display: none;
+}
+
+.trestle-address > summary::before {
+  content: "▸";
+  color: var(--cyan);
+  font-family: var(--mono);
+  flex-shrink: 0;
+}
+
+.trestle-address[open] > summary::before {
+  content: "▾";
+}
+
+.current-badge {
+  color: var(--acid);
+  border: 1px solid var(--acid);
+  background: var(--acid-dim);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  box-shadow: 0 0 10px rgba(200, 255, 0, 0.22);
+  white-space: nowrap;
+}
+
+.address-kind {
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  padding: 2px 7px;
+  white-space: nowrap;
+}
+
+.address-line {
+  overflow-wrap: anywhere;
+}
+
+.trestle-fields {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0 10px 10px 28px;
+}
+
+.trestle-fields > div {
+  display: grid;
+  grid-template-columns: minmax(140px, 180px) 1fr;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.trestle-fields dt {
+  margin: 0;
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.trestle-fields dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.trestle-empty {
+  margin: 0;
+  padding: 0 10px 10px 28px;
+}
+
 .empty {
   color: var(--dim);
   font-style: italic;
@@ -1065,6 +1233,8 @@ a.btn:hover {
   .layout,
   .identity,
   .finding,
+  .trestle-owner-head,
+  .trestle-fields > div,
   .search-row,
   .scan-banner {
     grid-template-columns: 1fr;

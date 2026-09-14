@@ -10,6 +10,13 @@ import {
   type ScanEvent,
 } from "../lib/api";
 import { collectPhotoFindings, isImageDork, type PhotoItem } from "../lib/photos";
+import {
+  addressDisplayFields,
+  groupTrestlePhoneFindings,
+  isTrestleCurrentAddress,
+  ownerDisplayFields,
+  type TrestleOwnerGroup,
+} from "../lib/trestle";
 
 const PHONE_SCANNER_IDS = ["phone", "numverify", "twilio", "whitepages", "trestle"] as const;
 
@@ -354,30 +361,7 @@ export function ReportPage() {
                     )}
                   </>
                 ) : unique.length ? (
-                  <div className="findings">
-                    {unique.map((f, i) => (
-                      <div
-                        className={findingClassName(f, section.id)}
-                        key={`${f.title}-${f.value}-${i}`}
-                      >
-                        <div className="title">
-                          {f.title}
-                          {f.extra?.source === "pdl" ? <span className="meta"> · PDL</span> : null}
-                          {f.extra?.source === "whitepages" ? <span className="meta"> · Whitepages</span> : null}
-                          {f.extra?.source === "trestle" ? <span className="meta"> · Trestle</span> : null}
-                        </div>
-                        <div className="value">
-                          {findingHref(f) ? (
-                            <a href={findingHref(f)!} target="_blank" rel="noreferrer">
-                              {f.value || f.url}
-                            </a>
-                          ) : (
-                            f.value
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  <PhoneOrFindingList items={unique} sectionId={section.id} />
                 ) : (
                   <p className="empty">
                     {running ? "Still collecting…" : "No public hits in this section."}
@@ -399,6 +383,127 @@ export function ReportPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+function PhoneOrFindingList({ items, sectionId }: { items: Finding[]; sectionId: string }) {
+  if (sectionId !== "phone") {
+    return (
+      <div className="findings">
+        {items.map((f, i) => (
+          <FindingRow key={`${f.title}-${f.value}-${i}`} finding={f} sectionId={sectionId} />
+        ))}
+      </div>
+    );
+  }
+  const { owners, leftover } = groupTrestlePhoneFindings(items);
+  return (
+    <div className="findings">
+      {leftover.map((f, i) => (
+        <FindingRow key={`${f.title}-${f.value}-${i}`} finding={f} sectionId={sectionId} />
+      ))}
+      {owners.map((owner) => (
+        <TrestleOwnerCard key={`trestle-owner-${owner.ownerIndex}`} owner={owner} />
+      ))}
+    </div>
+  );
+}
+
+function FindingRow({ finding, sectionId }: { finding: Finding; sectionId: string }) {
+  return (
+    <div className={findingClassName(finding, sectionId)}>
+      <div className="title">
+        {finding.title}
+        {finding.extra?.source === "pdl" ? <span className="meta"> · PDL</span> : null}
+        {finding.extra?.source === "whitepages" ? <span className="meta"> · Whitepages</span> : null}
+        {finding.extra?.source === "trestle" ? <span className="meta"> · Trestle</span> : null}
+      </div>
+      <div className="value">
+        {findingHref(finding) ? (
+          <a href={findingHref(finding)!} target="_blank" rel="noreferrer">
+            {finding.value || finding.url}
+          </a>
+        ) : (
+          finding.value
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TrestleOwnerCard({ owner }: { owner: TrestleOwnerGroup }) {
+  const chips = ownerDisplayFields(owner.ownerFields);
+  const heading = owner.name || "Owner";
+  return (
+    <div className="trestle-owner">
+      <div className="trestle-owner-head">
+        <div className="title">
+          Name
+          <span className="meta"> · Trestle</span>
+        </div>
+        <div className="value trestle-owner-name">{heading}</div>
+      </div>
+      {chips.length > 0 && (
+        <div className="trestle-chips">
+          {chips.map((chip) => (
+            <span className="trestle-chip" key={chip.key}>
+              <span className="trestle-chip-label">{chip.label}</span>
+              <b>{chip.value}</b>
+            </span>
+          ))}
+        </div>
+      )}
+      {owner.alternateNames.length > 0 && (
+        <div className="trestle-alts">
+          {owner.alternateNames.map((alt) => (
+            <div className="finding trestle-alt" key={alt}>
+              <div className="title">Alternate name</div>
+              <div className="value">{alt}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      {owner.addresses.length > 0 && (
+        <div className="trestle-addresses">
+          {owner.addresses.map((finding, i) => (
+            <TrestleAddressRow
+              key={`${finding.value}-${i}`}
+              finding={finding}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TrestleAddressRow({ finding }: { finding: Finding }) {
+  const current = isTrestleCurrentAddress(finding);
+  const extra = finding.extra && typeof finding.extra === "object" ? finding.extra : {};
+  const fields =
+    extra.fields && typeof extra.fields === "object" && !Array.isArray(extra.fields)
+      ? (extra.fields as Record<string, unknown>)
+      : {};
+  const rows = addressDisplayFields(fields);
+  return (
+    <details className={`trestle-address${current ? " current" : ""}`}>
+      <summary>
+        {current ? <span className="current-badge">Current Address</span> : <span className="address-kind">Address</span>}
+        <span className="address-line">{finding.value}</span>
+      </summary>
+      {rows.length ? (
+        <dl className="trestle-fields">
+          {rows.map((row) => (
+            <div key={row.key}>
+              <dt>{row.key}</dt>
+              <dd>{row.value}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : (
+        <p className="empty trestle-empty">No additional address fields returned.</p>
+      )}
+    </details>
   );
 }
 
