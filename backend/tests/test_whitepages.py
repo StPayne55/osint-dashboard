@@ -50,7 +50,7 @@ OFFICIAL_ARRAY_FIXTURE = [
 def test_whitepages_registered_in_catalog():
     ids = [s.id for s in all_scanners()]
     assert "whitepages" in ids
-    assert "trestle" not in ids
+    assert "trestle" in ids
     scanner = next(s for s in all_scanners() if s.id == "whitepages")
     assert scanner.name == "Whitepages Pro"
     assert scanner.optional_key == "WHITEPAGES_API_KEY"
@@ -247,7 +247,7 @@ def test_phone_jobs_plan_whitepages():
     query = build_query("+14155552671")
     planned = [s.id for s in all_scanners() if s.applicable(query) or s.optional_key]
     assert "whitepages" in planned
-    assert "trestle" not in planned
+    assert "trestle" in planned
     email = build_query("ada@example.com")
     assert WhitepagesProScanner().applicable(email) is False
 
