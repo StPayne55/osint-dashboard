@@ -124,8 +124,9 @@ PHONE_HONESTY = (
     "subscriber. A caller name (CNAM) only appears if you set Twilio Lookup "
     "keys — empty CNAM means no caller name on file (common for mobile "
     "numbers), never invented. Optional Whitepages Pro "
-    "(WHITEPAGES_API_KEY) may return owner names and addresses when the "
-    "Person Search API has them — missing fields stay empty. Use the labeled reverse-lookup "
+    "(WHITEPAGES_API_KEY) or Trestle Reverse Phone (TRESTLE_API_KEY) may "
+    "return owner names and addresses when those APIs have them — missing "
+    "fields stay empty. Use the labeled reverse-lookup "
     "search links (Whitepages, Thatsthem, FastPeopleSearch, TruePeopleSearch, "
     "Spokeo, 411) for manual follow-up."
 )

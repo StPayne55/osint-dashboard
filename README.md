@@ -21,6 +21,7 @@ cp .env.example .env
 # TWILIO_ACCOUNT_SID=...  TWILIO_AUTH_TOKEN=...   # optional US CNAM
 # PDL_API_KEY=...                                 # optional People Data Labs enrichment
 # WHITEPAGES_API_KEY=...                          # optional Whitepages Pro reverse phone
+# TRESTLE_API_KEY=...                             # optional Trestle Reverse Phone
 docker compose up --build
 ```
 
@@ -70,6 +71,7 @@ cd ../spiderfoot-runner && PYTHONPATH=. pytest
 | Numverify | optional API | phone | Carrier/line JSON | Skipped without `NUMVERIFY_API_KEY` |
 | Twilio Lookup | optional API | phone | US CNAM caller name + line-type intelligence | Skipped without `TWILIO_ACCOUNT_SID` + `TWILIO_AUTH_TOKEN`. Empty CNAM means no caller name on file (common for mobiles), never invented |
 | Whitepages Pro | optional API (`GET https://api.whitepages.com/v2/person?phone=`) | phone | Owner / belonging name(s), current or historical street addresses, email if present, brief line type and other returned public fields | Skipped without `WHITEPAGES_API_KEY`. Auth is the documented `X-Api-Key` header. Official Person Search API — not a whitepages.com scrape. Missing fields stay empty. No breach data |
+| Trestle Reverse Phone | optional API (`GET https://api.trestleiq.com/3.2/phone?phone=`) | phone | Owner / belonging name(s), current or associated street addresses, email if present, brief line type / carrier / prepaid / commercial flags | Skipped without `TRESTLE_API_KEY`. Auth is the documented `x-api-key` header. E.164 preferred. Missing fields stay empty. Does not scrape Whitepages/Spokeo and does not return breach data |
 
 The in-app **Catalog** page repeats this list from the live backend (`GET /api/catalog`). AbstractAPI phone validation is implemented but **not registered** (disabled pending a key) so it does not appear in Catalog or live scan modules.
 
@@ -139,7 +141,7 @@ A single small instance cannot run Holehe, Socialscan, Sherlock, Maigret, and Sp
 | `SPIDERFOOT_MAX_THREADS` | `8` on the runner | `sf.py -max-threads`; override if the Starter box is tight |
 | `SHERLOCK_FULL` | unset | Sherlock stays on the high-signal subset unless you set `1` |
 
-Lightweight modules (username candidates, MX, Gravatar, dorks, Twilio, HIBP, PDL, Whitepages Pro, …) still run in parallel. A heavy scanner stays **queued** on the module rail until it acquires the slot, then flips to **running**. Holehe and SpiderFoot keep any profile hits they already collected if the wall clock fires.
+Lightweight modules (username candidates, MX, Gravatar, dorks, Twilio, HIBP, PDL, Whitepages Pro, Trestle, …) still run in parallel. A heavy scanner stays **queued** on the module rail until it acquires the slot, then flips to **running**. Holehe and SpiderFoot keep any profile hits they already collected if the wall clock fires.
 
 ## Architecture
 
