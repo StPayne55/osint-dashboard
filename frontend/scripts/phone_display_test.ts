@@ -90,9 +90,17 @@ assert.equal(
   pickHeroName("MEAGAN REDPATH", "Meagan Lynn Redpath"),
   "Meagan Lynn Redpath",
 );
+assert.equal(
+  pickHeroName("Meagan Lynn Redpath", "MEAGAN REDPATH"),
+  "Meagan Lynn Redpath",
+);
 assert.equal(pickHeroName("MEAGAN REDPATH", ""), "MEAGAN REDPATH");
 assert.equal(pickHeroName("", "Stephen Thomas Payne"), "Stephen Thomas Payne");
 assert.equal(pickHeroName("No caller name on file (common for mobile numbers — CNAM often blank.)"), "");
+assert.notEqual(
+  pickHeroName("MEAGAN REDPATH", "Meagan Lynn Redpath"),
+  "MEAGAN REDPATH",
+);
 
 assert.equal(hasResolvedPhone(phoneQuery), true);
 assert.equal(hasResolvedPhone({ raw: "ada", type: "name", username_candidates: [] }), false);

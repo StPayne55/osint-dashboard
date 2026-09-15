@@ -98,17 +98,34 @@ export function pickHeroName(...names: Array<string | null | undefined>): string
     .map((name) => (name || "").trim())
     .filter((name) => name && !isEmptyCnamValue(name));
   if (!candidates.length) return "";
-  return [...candidates].sort((a, b) => scorePersonName(b) - scorePersonName(a))[0];
+  return [...candidates].sort((a, b) => comparePersonNames(b, a))[0];
 }
 
 export function scorePersonName(name: string): number {
-  const tokens = name.trim().split(/\s+/).filter(Boolean);
+  const tokens = nameTokens(name);
   const letters = name.replace(/[^A-Za-z]/g, "");
   const allCaps = letters.length > 0 && letters === letters.toUpperCase();
   let score = tokens.length * 12 + name.length;
   if (!allCaps) score += 10;
   if (tokens.length >= 3) score += 16;
   return score;
+}
+
+function nameTokens(name: string): string[] {
+  return name
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+}
+
+function comparePersonNames(a: string, b: string): number {
+  const aTokens = nameTokens(a);
+  const bTokens = nameTokens(b);
+  const aHasB = bTokens.every((token) => aTokens.includes(token));
+  const bHasA = aTokens.every((token) => bTokens.includes(token));
+  if (aHasB !== bHasA) return aHasB ? 1 : -1;
+  if (aHasB && bHasA && aTokens.length !== bTokens.length) return aTokens.length - bTokens.length;
+  return scorePersonName(a) - scorePersonName(b);
 }
 
 export function friendlyCnamValue(value: string | null | undefined): string {
