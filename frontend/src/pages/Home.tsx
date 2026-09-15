@@ -125,28 +125,6 @@ export function Home() {
           ))}
         </div>
       </form>
-
-      <div className="grid-2">
-        <article className="panel">
-          <h3>What this can do</h3>
-          <ul className="limits">
-            <li>See which public sites appear to have an email or username.</li>
-            <li>Pull extra social/account profile URLs from Maigret and open-source SpiderFoot (not HX).</li>
-            <li>Surface Gravatar and public Maigret display photos in the report (no image scraping).</li>
-            <li>Parse a phone into country, carrier dataset, and line type.</li>
-            <li>Hand you Google / DuckDuckGo / LinkedIn dorks for manual follow-up.</li>
-          </ul>
-        </article>
-        <article className="panel danger">
-          <h3>What this cannot do</h3>
-          <ul className="limits">
-            <li>No current home address, SSN, or government file from a name alone.</li>
-            <li>No Spokeo / BeenVerified / Dehashed / credential-dump integrations.</li>
-            <li>No login to private accounts. Rate-limits will look like misses.</li>
-            <li>HIBP, People Data Labs, Numverify, and Twilio CNAM stay skipped unless you add your own API keys.</li>
-          </ul>
-        </article>
-      </div>
     </div>
   );
 }
