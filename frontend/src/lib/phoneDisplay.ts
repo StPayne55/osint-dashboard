@@ -93,6 +93,24 @@ export function hasResolvedPhone(
   return Object.values(findings).some((rows) => rows.some((f) => f.kind === "phone" && Boolean(f.value)));
 }
 
+export function pickHeroName(...names: Array<string | null | undefined>): string {
+  const candidates = names
+    .map((name) => (name || "").trim())
+    .filter((name) => name && !isEmptyCnamValue(name));
+  if (!candidates.length) return "";
+  return [...candidates].sort((a, b) => scorePersonName(b) - scorePersonName(a))[0];
+}
+
+export function scorePersonName(name: string): number {
+  const tokens = name.trim().split(/\s+/).filter(Boolean);
+  const letters = name.replace(/[^A-Za-z]/g, "");
+  const allCaps = letters.length > 0 && letters === letters.toUpperCase();
+  let score = tokens.length * 12 + name.length;
+  if (!allCaps) score += 10;
+  if (tokens.length >= 3) score += 16;
+  return score;
+}
+
 export function friendlyCnamValue(value: string | null | undefined): string {
   const text = (value || "").trim();
   if (!text || EMPTY_CNAM_RE.test(text)) return EMPTY_CNAM_DISPLAY;

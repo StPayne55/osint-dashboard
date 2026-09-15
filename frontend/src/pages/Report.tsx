@@ -17,6 +17,7 @@ import {
   PHONE_SCANNER_IDS,
   pickBestCarrier,
   pickBestLineType,
+  pickHeroName,
   resolvePhoneFormatInput,
 } from "../lib/phoneDisplay";
 import {
@@ -24,6 +25,7 @@ import {
   groupTrestlePhoneFindings,
   isTrestleCurrentAddress,
   ownerDisplayFields,
+  ownersForDisplay,
   type TrestleOwnerGroup,
 } from "../lib/trestle";
 
@@ -166,6 +168,21 @@ export function ReportPage() {
     () => formatPhoneNumber(resolvePhoneFormatInput(report?.query, report?.identity, findings)),
     [report, findings],
   );
+  const displayedTrestleOwners = useMemo(() => {
+    const phoneFindings = PHONE_SCANNER_IDS.flatMap((id) => findings[id] || []);
+    return ownersForDisplay(groupTrestlePhoneFindings(phoneFindings).owners);
+  }, [findings]);
+  const heroName = useMemo(
+    () =>
+      pickHeroName(
+        phoneMeta.callerName,
+        phoneMeta.whitepagesOwner,
+        ...displayedTrestleOwners.map((owner) => owner.name),
+      ),
+    [phoneMeta, displayedTrestleOwners],
+  );
+  const emailCount = uniq(allFindings, "email").length || (report?.query.email ? 1 : 0);
+  const modulesDone = modules.filter((m) => m.status === "success" || m.status === "empty").length;
   const sectionOrder = useMemo(() => {
     const rest = SECTIONS.filter((s) => s.id !== "identity" && s.id !== "phone");
     const phone = SECTIONS.find((s) => s.id === "phone");
@@ -224,80 +241,42 @@ export function ReportPage() {
         </span>
       </div>
 
-      <div className="identity">
-        <div className="stat">
-          <b>{uniq(allFindings, "email").length || (report.query.email ? 1 : 0)}</b>
-          <span>Emails</span>
+      <div className="identity-card">
+        {heroName ? <div className="identity-name">{heroName}</div> : null}
+        <div className="identity-counts">
+          <span>
+            <b>{emailCount}</b> Emails
+          </span>
+          <span>
+            <b>{profileFindings.length}</b> Profiles
+          </span>
+          <span>
+            <b>{photoItems.length}</b> Photos
+          </span>
         </div>
-        <div className="stat">
-          <b>{profileFindings.length}</b>
-          <span>Profiles</span>
-        </div>
-        <div className="stat">
-          <b>{photoItems.length}</b>
-          <span>Photos</span>
-        </div>
-        <div className="stat">
-          <b>
-            {modules.filter((m) => m.status === "success" || m.status === "empty").length}/
-            {modules.length}
-          </b>
-          <span>Modules done</span>
-        </div>
+        {(phoneMeta.carrier || phoneMeta.lineType) && (
+          <p className="identity-phone-meta">
+            {[phoneMeta.carrier, phoneMeta.lineType].filter(Boolean).join(" · ")}
+          </p>
+        )}
       </div>
 
       {photoItems.length > 0 && (
         <div className="photo-strip" aria-label="Photos and avatars">
-          {photoItems.slice(0, 8).map((photo, i) => (
+          {photoItems.slice(0, 4).map((photo, i) => (
             <PhotoCard key={`${photo.url}-${i}`} photo={photo} compact />
           ))}
         </div>
       )}
 
-      {(phoneMeta.callerName || phoneMeta.whitepagesOwner || phoneMeta.trestleOwner || phoneMeta.carrier || phoneMeta.region || phoneMeta.lineType) && (
-        <div className="identity phone-meta">
-          {phoneMeta.callerName && (
-            <div className="stat">
-              <b>{phoneMeta.callerName}</b>
-              <span>Caller name (CNAM)</span>
-            </div>
-          )}
-          {phoneMeta.whitepagesOwner && phoneMeta.whitepagesOwner !== phoneMeta.callerName && (
-            <div className="stat">
-              <b>{phoneMeta.whitepagesOwner}</b>
-              <span>Owner name · Whitepages</span>
-            </div>
-          )}
-          {phoneMeta.trestleOwner && phoneMeta.trestleOwner !== phoneMeta.callerName && (
-            <div className="stat">
-              <b>{phoneMeta.trestleOwner}</b>
-              <span>Owner name</span>
-            </div>
-          )}
-          {phoneMeta.carrier && (
-            <div className="stat">
-              <b>{phoneMeta.carrier}</b>
-              <span>Carrier</span>
-            </div>
-          )}
-          {phoneMeta.region && (
-            <div className="stat">
-              <b>{phoneMeta.region}</b>
-              <span>Region</span>
-            </div>
-          )}
-          {phoneMeta.lineType && (
-            <div className="stat">
-              <b>{phoneMeta.lineType}</b>
-              <span>Line type</span>
-            </div>
-          )}
-        </div>
-      )}
-
       <div className="layout">
         <aside className="mod-list">
-          <h3>Module ticks</h3>
+          <h3>
+            Module ticks{" "}
+            <span className="meta">
+              {modulesDone}/{modules.length}
+            </span>
+          </h3>
           {modules.map((mod) => (
             <div className="mod" key={mod.id}>
               <div className="mod-left">
@@ -423,8 +402,9 @@ function PhoneOrFindingList({
     );
   }
   const { owners, leftover } = groupTrestlePhoneFindings(items);
+  const visibleOwners = ownersForDisplay(owners);
   const phoneRows = curatePhoneCardFindings(leftover, formattedPhone);
-  if (!phoneRows.length && !owners.length) {
+  if (!phoneRows.length && !visibleOwners.length) {
     return <p className="empty">No public hits in this section.</p>;
   }
   return (
@@ -432,7 +412,7 @@ function PhoneOrFindingList({
       {phoneRows.map((f, i) => (
         <FindingRow key={`${f.title}-${f.value}-${i}`} finding={f} sectionId={sectionId} />
       ))}
-      {owners.map((owner) => (
+      {visibleOwners.map((owner) => (
         <TrestleOwnerCard key={`trestle-owner-${owner.ownerIndex}`} owner={owner} />
       ))}
     </div>
@@ -441,7 +421,7 @@ function PhoneOrFindingList({
 
 function phoneSectionCount(items: Finding[], formattedPhone: string): number {
   const { owners, leftover } = groupTrestlePhoneFindings(items);
-  return curatePhoneCardFindings(leftover, formattedPhone).length + owners.length;
+  return curatePhoneCardFindings(leftover, formattedPhone).length + ownersForDisplay(owners).length;
 }
 
 function FindingRow({ finding, sectionId }: { finding: Finding; sectionId: string }) {

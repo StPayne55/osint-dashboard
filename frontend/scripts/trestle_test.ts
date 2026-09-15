@@ -6,6 +6,7 @@ import {
   groupTrestlePhoneFindings,
   isTrestleCurrentAddress,
   ownerDisplayFields,
+  ownersForDisplay,
 } from "../src/lib/trestle.ts";
 
 function finding(partial: Partial<Finding> & Pick<Finding, "title" | "value">): Finding {
@@ -105,11 +106,32 @@ const lineType = finding({
   extra: { source: "trestle" },
 });
 
-const grouped = groupTrestlePhoneFindings([lineType, older, current, ownerA, ownerB, ownerBAddress]);
+const business = finding({
+  title: "Name",
+  value: "Payne Stephen",
+  extra: {
+    source: "trestle",
+    finding_type: "trestle_owner",
+    owner_index: 2,
+    owner_type: "Business",
+    owner: { type: "Business", id: "Business.xyz" },
+  },
+});
+
+const grouped = groupTrestlePhoneFindings([lineType, older, current, ownerA, ownerB, ownerBAddress, business]);
 assert.equal(grouped.leftover.length, 1);
 assert.equal(grouped.leftover[0].title, "Line type");
-assert.equal(grouped.owners.length, 2);
+assert.equal(grouped.owners.length, 3);
 assert.equal(grouped.owners[0].name, "S Fraileigh");
+assert.equal(grouped.owners[2].name, "Payne Stephen");
+assert.equal(grouped.owners[2].ownerType, "Business");
+const visible = ownersForDisplay(grouped.owners);
+assert.equal(visible.length, 2);
+assert.ok(!visible.some((owner) => owner.name === "Payne Stephen"));
+assert.deepEqual(
+  ownersForDisplay([grouped.owners[2]]).map((owner) => owner.name),
+  ["Payne Stephen"],
+);
 assert.equal(grouped.owners[0].addresses[0].value, current.value);
 assert.equal(isTrestleCurrentAddress(grouped.owners[0].addresses[0]), true);
 assert.equal(isTrestleCurrentAddress(grouped.owners[0].addresses[1]), false);

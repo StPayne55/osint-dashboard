@@ -9,6 +9,7 @@ import {
   isPhoneCardClutter,
   pickBestCarrier,
   pickBestLineType,
+  pickHeroName,
 } from "../src/lib/phoneDisplay.ts";
 
 function finding(partial: Partial<Finding> & Pick<Finding, "title" | "value">): Finding {
@@ -85,6 +86,14 @@ const phoneQuery: Query = {
   phone_country_code: "1",
   username_candidates: [],
 };
+assert.equal(
+  pickHeroName("MEAGAN REDPATH", "Meagan Lynn Redpath"),
+  "Meagan Lynn Redpath",
+);
+assert.equal(pickHeroName("MEAGAN REDPATH", ""), "MEAGAN REDPATH");
+assert.equal(pickHeroName("", "Stephen Thomas Payne"), "Stephen Thomas Payne");
+assert.equal(pickHeroName("No caller name on file (common for mobile numbers — CNAM often blank.)"), "");
+
 assert.equal(hasResolvedPhone(phoneQuery), true);
 assert.equal(hasResolvedPhone({ raw: "ada", type: "name", username_candidates: [] }), false);
 assert.equal(

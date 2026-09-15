@@ -56,6 +56,7 @@ export type TrestleOwnerGroup = {
   name: string;
   nameFinding: Finding | null;
   ownerFields: Record<string, unknown>;
+  ownerType: string;
   alternateNames: string[];
   addresses: Finding[];
 };
@@ -232,6 +233,7 @@ export function groupTrestlePhoneFindings(items: Finding[]): {
         name: "",
         nameFinding: null,
         ownerFields: {},
+        ownerType: "",
         alternateNames: [],
         addresses: [],
       };
@@ -253,6 +255,7 @@ export function groupTrestlePhoneFindings(items: Finding[]): {
       group.name = finding.value;
       const fields = asOwnerFields(extraOf(finding).owner);
       if (Object.keys(fields).length) group.ownerFields = fields;
+      group.ownerType = ownerTypeOf(group, extraOf(finding));
       continue;
     }
     if (isTrestleAddressFinding(finding)) {
@@ -273,6 +276,7 @@ export function groupTrestlePhoneFindings(items: Finding[]): {
     .sort((a, b) => a.ownerIndex - b.ownerIndex)
     .map((group) => ({
       ...group,
+      ownerType: group.ownerType || ownerTypeOf(group, extraOf(group.nameFinding || group.addresses[0])),
       addresses: [...group.addresses].sort((a, b) => {
         const currentDelta = Number(isTrestleCurrentAddress(b)) - Number(isTrestleCurrentAddress(a));
         if (currentDelta) return currentDelta;
@@ -281,4 +285,25 @@ export function groupTrestlePhoneFindings(items: Finding[]): {
     }));
 
   return { owners, leftover };
+}
+
+function ownerTypeOf(group: TrestleOwnerGroup, extra: Record<string, unknown>): string {
+  const fromFields = formatTrestleField(group.ownerFields.type);
+  if (fromFields) return fromFields;
+  if (typeof extra.owner_type === "string" && extra.owner_type.trim()) return extra.owner_type.trim();
+  return "";
+}
+
+export function isPersonOwner(owner: TrestleOwnerGroup): boolean {
+  return owner.ownerType.trim().toLowerCase() === "person";
+}
+
+export function isBusinessOwner(owner: TrestleOwnerGroup): boolean {
+  const type = owner.ownerType.trim().toLowerCase();
+  return type === "business" || type === "company" || type === "organization";
+}
+
+export function ownersForDisplay(owners: TrestleOwnerGroup[]): TrestleOwnerGroup[] {
+  if (owners.some(isPersonOwner)) return owners.filter((owner) => !isBusinessOwner(owner));
+  return owners;
 }

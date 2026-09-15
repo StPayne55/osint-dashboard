@@ -611,15 +611,51 @@ a.btn:hover {
   transition: width 0.35s ease;
 }
 
-.identity {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-  margin-bottom: 22px;
+.identity-card {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  background: var(--glass-strong);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(12px);
 }
 
-.identity.phone-meta {
-  margin-top: -10px;
+.identity-name {
+  margin: 0 0 8px;
+  font-family: var(--display);
+  font-size: clamp(18px, 3vw, 26px);
+  letter-spacing: 0.04em;
+  color: var(--acid);
+  text-shadow: 0 0 12px rgba(200, 255, 0, 0.28);
+  overflow-wrap: anywhere;
+}
+
+.identity-counts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.identity-counts span {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.identity-counts b {
+  color: var(--cyan);
+  font-family: var(--display);
+  font-size: 16px;
+  margin-right: 6px;
+}
+
+.identity-phone-meta {
+  margin: 8px 0 0;
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
 }
 
 .section-blurb {
@@ -1221,7 +1257,6 @@ a.btn:hover {
 @media (max-width: 900px) {
   .grid-2,
   .layout,
-  .identity,
   .finding,
   .trestle-owner-head,
   .trestle-fields > div,
@@ -1230,6 +1265,32 @@ a.btn:hover {
     grid-template-columns: 1fr;
     display: flex;
     flex-direction: column;
+  }
+
+  .identity-card {
+    margin-bottom: 10px;
+    padding: 10px 12px;
+  }
+
+  .identity-name {
+    font-size: 18px;
+    margin-bottom: 6px;
+  }
+
+  .identity-counts {
+    gap: 4px;
+  }
+
+  .identity-counts b {
+    font-size: 14px;
+  }
+
+  .identity-phone-meta {
+    margin-top: 6px;
+  }
+
+  .photo-strip {
+    margin-bottom: 10px;
   }
 
   .mod-list {
