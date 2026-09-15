@@ -13,10 +13,13 @@ export function SocialBadges({ items }: { items: SocialBadgeItem[] }) {
 function SocialBadge({ item }: { item: SocialBadgeItem }) {
   const inner = (
     <>
-      <SocialMark slug={item.slug} label={item.site} />
-      <span className="social-badge-check" aria-hidden>
-        <CheckMark />
+      <span className="social-badge-mark">
+        <SocialMark slug={item.slug} label={item.site} />
+        <span className="social-badge-check" aria-hidden>
+          <CheckMark />
+        </span>
       </span>
+      <span className="social-badge-name">{item.site}</span>
     </>
   );
   const label = item.url ? `${item.site} profile` : `${item.site} account found`;

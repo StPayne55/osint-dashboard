@@ -914,9 +914,40 @@ a.btn:hover {
   margin: 4px 0 8px;
 }
 
-.trestle-alt {
+.trestle-alts .title,
+.enumerated-group .title {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.enumerated-group {
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(0, 240, 255, 0.1);
+}
+
+.enumerated-values {
+  display: grid;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.enumerated-value {
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(0, 240, 255, 0.1);
+  font-size: 14px;
+}
+
+.enumerated-value:last-child,
+.enumerated-group:last-child,
+.enumerated-group .enumerated-value:last-child {
   border-bottom: 0;
-  padding: 4px 0;
+}
+
+.enumerated-value,
+.enumerated-value .value,
+.enumerated-group .value {
+  overflow-wrap: anywhere;
 }
 
 .trestle-addresses {
@@ -1068,10 +1099,24 @@ a.btn:hover {
 .social-badges {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 12px 14px;
 }
 
 .social-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 64px;
+  color: var(--cyan);
+  text-align: center;
+}
+
+a.social-badge {
+  color: var(--cyan);
+}
+
+.social-badge-mark {
   position: relative;
   width: 48px;
   height: 48px;
@@ -1079,18 +1124,16 @@ a.btn:hover {
   place-items: center;
   border: 1px solid var(--line);
   background: var(--glass-strong);
-  color: var(--cyan);
   box-shadow: 0 0 14px rgba(0, 240, 255, 0.1);
 }
 
-a.social-badge {
-  color: var(--cyan);
-}
-
 a.social-badge:hover {
-  border-color: var(--cyan);
   color: #9ffffe;
   text-shadow: none;
+}
+
+a.social-badge:hover .social-badge-mark {
+  border-color: var(--cyan);
   box-shadow: 0 0 16px rgba(0, 240, 255, 0.22);
 }
 
@@ -1098,6 +1141,15 @@ a.social-badge:hover {
   width: 26px;
   height: 26px;
   fill: currentColor;
+}
+
+.social-badge-name {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
 .social-badge-initial {
