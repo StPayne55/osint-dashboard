@@ -310,3 +310,75 @@ export function ownersForDisplay(owners: TrestleOwnerGroup[]): TrestleOwnerGroup
   if (owners.some(isPersonOwner)) return owners.filter((owner) => !isBusinessOwner(owner));
   return owners;
 }
+
+export function normalizePersonName(name: string): string {
+  return name
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean)
+    .join(" ");
+}
+
+export function isDirectNameMatch(candidate: string, primaryName: string): boolean {
+  const left = normalizePersonName(candidate);
+  const right = normalizePersonName(primaryName);
+  return Boolean(left && right && left === right);
+}
+
+export function ownerIdOf(owner: TrestleOwnerGroup): string {
+  return formatTrestleField(owner.ownerFields.id);
+}
+
+export function isDirectOwnerMatch(
+  owner: TrestleOwnerGroup,
+  primaryName: string,
+  primaryOwnerId = "",
+): boolean {
+  const id = ownerIdOf(owner);
+  if (primaryOwnerId && id && id === primaryOwnerId) return true;
+  return isDirectNameMatch(owner.name, primaryName);
+}
+
+const EMPTY_DISPLAY_NAME_RE =
+  /no caller name on file|cnam (was empty|often blank)|common for mobile|no caller name resolved/i;
+
+export function isCompetingDisplayName(candidate: string, primaryName: string): boolean {
+  if (!normalizePersonName(primaryName)) return false;
+  const text = candidate.trim();
+  if (!text || EMPTY_DISPLAY_NAME_RE.test(text)) return false;
+  return !isDirectNameMatch(text, primaryName);
+}
+
+export function takeCompetingCallerName(
+  rows: Finding[],
+  primaryName: string,
+): { rows: Finding[]; competingCnam: Finding | null } {
+  const competingCnam =
+    rows.find((row) => {
+      const title = (row.title || "").trim().toLowerCase();
+      return title === "caller name (cnam)" && isCompetingDisplayName(row.value, primaryName);
+    }) || null;
+  return {
+    rows: competingCnam ? rows.filter((row) => row !== competingCnam) : rows,
+    competingCnam,
+  };
+}
+
+export function partitionOwnersByPrimary(
+  owners: TrestleOwnerGroup[],
+  primaryName: string,
+): { primary: TrestleOwnerGroup[]; competing: TrestleOwnerGroup[] } {
+  const visible = ownersForDisplay(owners);
+  if (!normalizePersonName(primaryName)) {
+    return { primary: visible, competing: [] };
+  }
+  const namedPrimary = visible.find((owner) => isDirectNameMatch(owner.name, primaryName));
+  const primaryOwnerId = namedPrimary ? ownerIdOf(namedPrimary) : "";
+  const primary: TrestleOwnerGroup[] = [];
+  const competing: TrestleOwnerGroup[] = [];
+  for (const owner of visible) {
+    if (isDirectOwnerMatch(owner, primaryName, primaryOwnerId)) primary.push(owner);
+    else competing.push(owner);
+  }
+  return { primary, competing };
+}

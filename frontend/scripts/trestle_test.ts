@@ -4,9 +4,15 @@ import {
   addressDisplayFields,
   formatTrestleField,
   groupTrestlePhoneFindings,
+  isCompetingDisplayName,
+  isDirectNameMatch,
+  isDirectOwnerMatch,
   isTrestleCurrentAddress,
+  normalizePersonName,
   ownerDisplayFields,
   ownersForDisplay,
+  partitionOwnersByPrimary,
+  takeCompetingCallerName,
 } from "../src/lib/trestle.ts";
 
 function finding(partial: Partial<Finding> & Pick<Finding, "title" | "value">): Finding {
@@ -222,5 +228,128 @@ assert.deepEqual(
 );
 assert.equal(formatTrestleField(null), "");
 assert.equal(formatTrestleField(""), "");
+
+assert.equal(normalizePersonName("Stephen J. Payne"), "stephen j payne");
+assert.equal(isDirectNameMatch("Stephen Thomas Payne", "STEPHEN THOMAS PAYNE"), true);
+assert.equal(isDirectNameMatch("Stephen Thomas Payne", "Stephen J Payne"), false);
+assert.equal(isDirectNameMatch("Stephen J. Payne", "Stephen J Payne"), true);
+assert.equal(isDirectNameMatch("PAYNE STEPHEN J", "Stephen Thomas Payne"), false);
+
+const stephenThomas = finding({
+  title: "Name",
+  value: "Stephen Thomas Payne",
+  extra: {
+    source: "trestle",
+    finding_type: "trestle_owner",
+    owner_index: 0,
+    owner_type: "Person",
+    owner: {
+      id: "Person.primary",
+      type: "Person",
+      age_range: "36-40",
+      gender: "M",
+    },
+  },
+});
+const stephenThomasAlt = finding({
+  title: "Alternate name",
+  value: "Steve Thomas Payne",
+  extra: {
+    source: "trestle",
+    finding_type: "trestle_owner_field",
+    owner_index: 0,
+  },
+});
+const stephenJ = finding({
+  title: "Name",
+  value: "Stephen J Payne",
+  extra: {
+    source: "trestle",
+    finding_type: "trestle_owner",
+    owner_index: 1,
+    owner_type: "Person",
+    owner: { id: "Person.other", type: "Person", age_range: "36-40", gender: "M" },
+  },
+});
+const hiddenBusiness = finding({
+  title: "Name",
+  value: "Payne Stephen",
+  extra: {
+    source: "trestle",
+    finding_type: "trestle_owner",
+    owner_index: 2,
+    owner_type: "Business",
+    owner: { type: "Business", id: "Business.hidden" },
+  },
+});
+const paynePeople = groupTrestlePhoneFindings([
+  stephenThomas,
+  stephenThomasAlt,
+  stephenJ,
+  hiddenBusiness,
+]);
+const split = partitionOwnersByPrimary(paynePeople.owners, "Stephen Thomas Payne");
+assert.deepEqual(
+  split.primary.map((owner) => owner.name),
+  ["Stephen Thomas Payne"],
+);
+assert.deepEqual(split.primary[0].alternateNames, ["Steve Thomas Payne"]);
+assert.deepEqual(
+  split.competing.map((owner) => owner.name),
+  ["Stephen J Payne"],
+);
+assert.ok(!split.competing.some((owner) => owner.name === "Payne Stephen"));
+
+const sameIdTwin = finding({
+  title: "Name",
+  value: "Stephen J Payne",
+  extra: {
+    source: "trestle",
+    finding_type: "trestle_owner",
+    owner_index: 1,
+    owner_type: "Person",
+    owner: { id: "Person.primary", type: "Person" },
+  },
+});
+const sameIdGroup = groupTrestlePhoneFindings([stephenThomas, sameIdTwin]);
+assert.equal(isDirectOwnerMatch(sameIdGroup.owners[1], "Stephen Thomas Payne", "Person.primary"), true);
+assert.deepEqual(
+  partitionOwnersByPrimary(sameIdGroup.owners, "Stephen Thomas Payne").competing.map((owner) => owner.name),
+  [],
+);
+
+const noPrimary = partitionOwnersByPrimary(paynePeople.owners, "");
+assert.deepEqual(
+  noPrimary.primary.map((owner) => owner.name),
+  ["Stephen Thomas Payne", "Stephen J Payne"],
+);
+assert.deepEqual(noPrimary.competing, []);
+
+const onlyCompeting = partitionOwnersByPrimary(paynePeople.owners, "Meagan Lynn Redpath");
+assert.deepEqual(onlyCompeting.primary, []);
+assert.deepEqual(
+  onlyCompeting.competing.map((owner) => owner.name),
+  ["Stephen Thomas Payne", "Stephen J Payne"],
+);
+
+assert.equal(isCompetingDisplayName("PAYNE STEPHEN J", "Stephen Thomas Payne"), true);
+assert.equal(isCompetingDisplayName("STEPHEN THOMAS PAYNE", "Stephen Thomas Payne"), false);
+assert.equal(isCompetingDisplayName("No Caller Name Resolved", "Stephen Thomas Payne"), false);
+assert.equal(isCompetingDisplayName("", "Stephen Thomas Payne"), false);
+assert.equal(isCompetingDisplayName("PAYNE STEPHEN J", ""), false);
+
+const cnamRow = finding({
+  kind: "metadata",
+  title: "Caller name (CNAM)",
+  value: "PAYNE STEPHEN J",
+});
+const formattedRow = finding({ kind: "phone", title: "Formatted", value: "+1 248-520-6067" });
+const pulled = takeCompetingCallerName([formattedRow, cnamRow], "Stephen Thomas Payne");
+assert.equal(pulled.competingCnam?.value, "PAYNE STEPHEN J");
+assert.deepEqual(
+  pulled.rows.map((row) => row.title),
+  ["Formatted"],
+);
+assert.equal(takeCompetingCallerName([formattedRow, cnamRow], "PAYNE STEPHEN J").competingCnam, null);
 
 console.log("trestle_test ok");
