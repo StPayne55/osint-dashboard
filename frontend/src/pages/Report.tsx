@@ -22,6 +22,7 @@ import {
   resolvePhoneFormatInput,
 } from "../lib/phoneDisplay";
 import { groupEnumeratedFindings } from "../lib/enumeratedFields";
+import { isEnabledScanner, isHiddenModuleStatus, visibleModules } from "../lib/modules";
 import {
   collectConfirmedSocials,
   isConcreteProfileUrl,
@@ -89,10 +90,10 @@ export function ReportPage() {
       const event = JSON.parse(msg.data) as ScanEvent;
       if (event.type === "job" && event.status === "started") {
         setModules(
-          (event.scanners || []).map((s) => ({
+          (event.scanners || []).filter((s) => isEnabledScanner(s, event.query)).map((s) => ({
             id: s.id,
             name: s.name,
-            status: "queued",
+            status: "queued" as const,
             summary: "",
             duration_ms: 0,
             finding_count: 0,
@@ -100,28 +101,20 @@ export function ReportPage() {
         );
       }
       if (event.type === "scanner") {
+        const incoming = event.result?.status || {
+          id: event.id,
+          name: event.name || event.id,
+          status: event.status,
+          summary: "",
+          duration_ms: 0,
+          finding_count: 0,
+        };
         setModules((prev) => {
-          const next = prev.map((m) =>
-            m.id === event.id
-              ? event.result?.status || {
-                  ...m,
-                  status: event.status,
-                  name: event.name || m.name,
-                }
-              : m,
-          );
-          if (!next.some((m) => m.id === event.id)) {
-            next.push(
-              event.result?.status || {
-                id: event.id,
-                name: event.name || event.id,
-                status: event.status,
-                summary: "",
-                duration_ms: 0,
-                finding_count: 0,
-              },
-            );
+          if (isHiddenModuleStatus(incoming.status)) {
+            return prev.filter((m) => m.id !== event.id);
           }
+          const next = prev.map((m) => (m.id === event.id ? incoming : m));
+          if (!next.some((m) => m.id === event.id)) next.push(incoming);
           return next;
         });
         if (event.result) {
@@ -185,7 +178,8 @@ export function ReportPage() {
     [phoneMeta, displayedTrestleOwners],
   );
   const emailCount = uniq(allFindings, "email").length || (report?.query.email ? 1 : 0);
-  const modulesDone = modules.filter((m) => m.status === "success" || m.status === "empty").length;
+  const visibleMods = useMemo(() => visibleModules(modules), [modules]);
+  const modulesDone = visibleMods.filter((m) => m.status === "success" || m.status === "empty").length;
   const sectionOrder = useMemo(() => {
     const rest = SECTIONS.filter((s) => {
       if (s.id === "identity" || s.id === "phone") return false;
@@ -197,9 +191,9 @@ export function ReportPage() {
     if (showPhoneSection && phone) return [phone, ...rest];
     return rest;
   }, [showPhoneSection, confirmedSocials.length, leftoverNotes.length]);
-  const running = modules.some((m) => m.status === "running" || m.status === "queued");
-  const done = modules.filter((m) => !["queued", "running"].includes(m.status)).length;
-  const pct = modules.length ? Math.round((done / modules.length) * 100) : 0;
+  const running = visibleMods.some((m) => m.status === "running" || m.status === "queued");
+  const done = visibleMods.filter((m) => !["queued", "running"].includes(m.status)).length;
+  const pct = visibleMods.length ? Math.round((done / visibleMods.length) * 100) : 0;
 
   if (error) {
     return (
@@ -245,7 +239,7 @@ export function ReportPage() {
           <i style={{ width: `${pct}%` }} />
         </div>
         <span className="meta">
-          {done}/{modules.length || 0} modules · {pct}%
+          {done}/{visibleMods.length || 0} modules · {pct}%
         </span>
       </div>
 
@@ -282,10 +276,10 @@ export function ReportPage() {
           <h3>
             Module ticks{" "}
             <span className="meta">
-              {modulesDone}/{modules.length}
+              {modulesDone}/{visibleMods.length}
             </span>
           </h3>
-          {modules.map((mod) => (
+          {visibleMods.map((mod) => (
             <div className="mod" key={mod.id}>
               <div className="mod-left">
                 <span className={`led ${mod.status}`} aria-hidden />
