@@ -26,6 +26,8 @@ import {
   isTrestleCurrentAddress,
   ownerDisplayFields,
   ownersForDisplay,
+  partitionOwnersByPrimary,
+  takeCompetingCallerName,
   type TrestleOwnerGroup,
 } from "../lib/trestle";
 
@@ -209,7 +211,7 @@ export function ReportPage() {
     <div>
       <div className="report-head">
         <div>
-          <p className="kicker">{running ? "Live uplink" : "Packet complete"}</p>
+          <p className="kicker">{running ? "Searching…" : "Ready"}</p>
           <h2>{report.query.raw}</h2>
           <p className="meta">
             type {report.query.type}
@@ -315,8 +317,8 @@ export function ReportPage() {
                   <span className="meta">
                     {section.id === "images"
                       ? photoItems.length
-                      : section.id === "phone"
-                        ? phoneSectionCount(unique, formattedPhone)
+                        : section.id === "phone"
+                        ? phoneSectionCount(unique, formattedPhone, heroName)
                         : unique.length}
                   </span>
                 </h3>
@@ -356,7 +358,12 @@ export function ReportPage() {
                     )}
                   </>
                 ) : section.id === "phone" ? (
-                  <PhoneOrFindingList items={unique} sectionId={section.id} formattedPhone={formattedPhone} />
+                  <PhoneOrFindingList
+                    items={unique}
+                    sectionId={section.id}
+                    formattedPhone={formattedPhone}
+                    primaryName={heroName}
+                  />
                 ) : unique.length ? (
                   <PhoneOrFindingList items={unique} sectionId={section.id} />
                 ) : (
@@ -387,10 +394,12 @@ function PhoneOrFindingList({
   items,
   sectionId,
   formattedPhone = "",
+  primaryName = "",
 }: {
   items: Finding[];
   sectionId: string;
   formattedPhone?: string;
+  primaryName?: string;
 }) {
   if (sectionId !== "phone") {
     return (
@@ -402,9 +411,12 @@ function PhoneOrFindingList({
     );
   }
   const { owners, leftover } = groupTrestlePhoneFindings(items);
-  const visibleOwners = ownersForDisplay(owners);
-  const phoneRows = curatePhoneCardFindings(leftover, formattedPhone);
-  if (!phoneRows.length && !visibleOwners.length) {
+  const { primary, competing } = partitionOwnersByPrimary(owners, primaryName);
+  const { rows: phoneRows, competingCnam } = takeCompetingCallerName(
+    curatePhoneCardFindings(leftover, formattedPhone),
+    primaryName,
+  );
+  if (!phoneRows.length && !primary.length && !competing.length && !competingCnam) {
     return <p className="empty">No public hits in this section.</p>;
   }
   return (
@@ -412,16 +424,43 @@ function PhoneOrFindingList({
       {phoneRows.map((f, i) => (
         <FindingRow key={`${f.title}-${f.value}-${i}`} finding={f} sectionId={sectionId} />
       ))}
-      {visibleOwners.map((owner) => (
+      {primary.map((owner) => (
         <TrestleOwnerCard key={`trestle-owner-${owner.ownerIndex}`} owner={owner} />
       ))}
+      <OtherPotentialMatches owners={competing} cnam={competingCnam} />
     </div>
   );
 }
 
-function phoneSectionCount(items: Finding[], formattedPhone: string): number {
+function OtherPotentialMatches({
+  owners,
+  cnam,
+}: {
+  owners: TrestleOwnerGroup[];
+  cnam: Finding | null;
+}) {
+  if (!owners.length && !cnam) return null;
+  return (
+    <details className="other-matches">
+      <summary>other potential matches</summary>
+      <div className="other-matches-body">
+        {cnam ? <FindingRow finding={cnam} sectionId="phone" /> : null}
+        {owners.map((owner) => (
+          <TrestleOwnerCard key={`trestle-other-${owner.ownerIndex}`} owner={owner} />
+        ))}
+      </div>
+    </details>
+  );
+}
+
+function phoneSectionCount(items: Finding[], formattedPhone: string, primaryName = ""): number {
   const { owners, leftover } = groupTrestlePhoneFindings(items);
-  return curatePhoneCardFindings(leftover, formattedPhone).length + ownersForDisplay(owners).length;
+  const { primary, competing } = partitionOwnersByPrimary(owners, primaryName);
+  const { rows, competingCnam } = takeCompetingCallerName(
+    curatePhoneCardFindings(leftover, formattedPhone),
+    primaryName,
+  );
+  return rows.length + primary.length + competing.length + (competingCnam ? 1 : 0);
 }
 
 function FindingRow({ finding, sectionId }: { finding: Finding; sectionId: string }) {

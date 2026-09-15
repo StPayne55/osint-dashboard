@@ -1018,6 +1018,53 @@ a.btn:hover {
   padding: 0 10px 10px 28px;
 }
 
+.other-matches {
+  border: 1px solid rgba(0, 240, 255, 0.14);
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.other-matches > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  cursor: pointer;
+  list-style: none;
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+
+.other-matches > summary::-webkit-details-marker {
+  display: none;
+}
+
+.other-matches > summary::before {
+  content: "▸";
+  color: var(--cyan);
+  font-family: var(--mono);
+  flex-shrink: 0;
+}
+
+.other-matches[open] > summary::before {
+  content: "▾";
+}
+
+.other-matches-body {
+  display: grid;
+  gap: 8px;
+  padding: 0 10px 10px;
+}
+
+.other-matches-body .trestle-owner {
+  box-shadow: none;
+}
+
+.other-matches-body .finding:last-child {
+  border-bottom: 0;
+}
+
 .empty {
   color: var(--dim);
   font-style: italic;
