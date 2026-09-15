@@ -21,6 +21,8 @@ import {
   pickHeroName,
   resolvePhoneFormatInput,
 } from "../lib/phoneDisplay";
+import { groupEnumeratedFindings } from "../lib/enumeratedFields";
+import { isEnabledScanner, isHiddenModuleStatus, visibleModules } from "../lib/modules";
 import {
   collectConfirmedSocials,
   isConcreteProfileUrl,
@@ -88,10 +90,10 @@ export function ReportPage() {
       const event = JSON.parse(msg.data) as ScanEvent;
       if (event.type === "job" && event.status === "started") {
         setModules(
-          (event.scanners || []).map((s) => ({
+          (event.scanners || []).filter((s) => isEnabledScanner(s, event.query)).map((s) => ({
             id: s.id,
             name: s.name,
-            status: "queued",
+            status: "queued" as const,
             summary: "",
             duration_ms: 0,
             finding_count: 0,
@@ -99,28 +101,20 @@ export function ReportPage() {
         );
       }
       if (event.type === "scanner") {
+        const incoming = event.result?.status || {
+          id: event.id,
+          name: event.name || event.id,
+          status: event.status,
+          summary: "",
+          duration_ms: 0,
+          finding_count: 0,
+        };
         setModules((prev) => {
-          const next = prev.map((m) =>
-            m.id === event.id
-              ? event.result?.status || {
-                  ...m,
-                  status: event.status,
-                  name: event.name || m.name,
-                }
-              : m,
-          );
-          if (!next.some((m) => m.id === event.id)) {
-            next.push(
-              event.result?.status || {
-                id: event.id,
-                name: event.name || event.id,
-                status: event.status,
-                summary: "",
-                duration_ms: 0,
-                finding_count: 0,
-              },
-            );
+          if (isHiddenModuleStatus(incoming.status)) {
+            return prev.filter((m) => m.id !== event.id);
           }
+          const next = prev.map((m) => (m.id === event.id ? incoming : m));
+          if (!next.some((m) => m.id === event.id)) next.push(incoming);
           return next;
         });
         if (event.result) {
@@ -184,7 +178,8 @@ export function ReportPage() {
     [phoneMeta, displayedTrestleOwners],
   );
   const emailCount = uniq(allFindings, "email").length || (report?.query.email ? 1 : 0);
-  const modulesDone = modules.filter((m) => m.status === "success" || m.status === "empty").length;
+  const visibleMods = useMemo(() => visibleModules(modules), [modules]);
+  const modulesDone = visibleMods.filter((m) => m.status === "success" || m.status === "empty").length;
   const sectionOrder = useMemo(() => {
     const rest = SECTIONS.filter((s) => {
       if (s.id === "identity" || s.id === "phone") return false;
@@ -196,9 +191,9 @@ export function ReportPage() {
     if (showPhoneSection && phone) return [phone, ...rest];
     return rest;
   }, [showPhoneSection, confirmedSocials.length, leftoverNotes.length]);
-  const running = modules.some((m) => m.status === "running" || m.status === "queued");
-  const done = modules.filter((m) => !["queued", "running"].includes(m.status)).length;
-  const pct = modules.length ? Math.round((done / modules.length) * 100) : 0;
+  const running = visibleMods.some((m) => m.status === "running" || m.status === "queued");
+  const done = visibleMods.filter((m) => !["queued", "running"].includes(m.status)).length;
+  const pct = visibleMods.length ? Math.round((done / visibleMods.length) * 100) : 0;
 
   if (error) {
     return (
@@ -244,7 +239,7 @@ export function ReportPage() {
           <i style={{ width: `${pct}%` }} />
         </div>
         <span className="meta">
-          {done}/{modules.length || 0} modules · {pct}%
+          {done}/{visibleMods.length || 0} modules · {pct}%
         </span>
       </div>
 
@@ -281,10 +276,10 @@ export function ReportPage() {
           <h3>
             Module ticks{" "}
             <span className="meta">
-              {modulesDone}/{modules.length}
+              {modulesDone}/{visibleMods.length}
             </span>
           </h3>
-          {modules.map((mod) => (
+          {visibleMods.map((mod) => (
             <div className="mod" key={mod.id}>
               <div className="mod-left">
                 <span className={`led ${mod.status}`} aria-hidden />
@@ -407,13 +402,7 @@ function PhoneOrFindingList({
   primaryName?: string;
 }) {
   if (sectionId !== "phone") {
-    return (
-      <div className="findings">
-        {items.map((f, i) => (
-          <FindingRow key={`${f.title}-${f.value}-${i}`} finding={f} sectionId={sectionId} />
-        ))}
-      </div>
-    );
+    return <FindingList items={items} sectionId={sectionId} />;
   }
   const { owners, leftover } = groupTrestlePhoneFindings(items);
   const { primary, competing } = partitionOwnersByPrimary(owners, primaryName);
@@ -470,6 +459,43 @@ function phoneSectionCount(items: Finding[], formattedPhone: string, primaryName
   return rows.length + primary.length + competing.length + (competingCnam ? 1 : 0);
 }
 
+function FindingList({ items, sectionId }: { items: Finding[]; sectionId: string }) {
+  if (sectionId === "usernames") {
+    return (
+      <div className="findings enumerated-values" aria-label="Username candidates">
+        {items.map((finding, i) => (
+          <ValueRow key={`${finding.title}-${finding.value}-${i}`} finding={finding} className="enumerated-value" />
+        ))}
+      </div>
+    );
+  }
+  return (
+    <div className="findings">
+      {groupEnumeratedFindings(items).map((group, i) => {
+        if (group.type === "enumerated") {
+          return (
+            <div className="enumerated-group" key={`${group.label}-${i}`}>
+              <div className="title">{group.label}</div>
+              <div className="enumerated-values">
+                {group.findings.map((finding, j) => (
+                  <ValueRow key={`${finding.title}-${finding.value}-${j}`} finding={finding} className="enumerated-value" />
+                ))}
+              </div>
+            </div>
+          );
+        }
+        return (
+          <FindingRow
+            key={`${group.finding.title}-${group.finding.value}-${i}`}
+            finding={group.finding}
+            sectionId={sectionId}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
 function FindingRow({ finding, sectionId }: { finding: Finding; sectionId: string }) {
   return (
     <div className={findingClassName(finding, sectionId)}>
@@ -478,15 +504,23 @@ function FindingRow({ finding, sectionId }: { finding: Finding; sectionId: strin
         {finding.extra?.source === "pdl" ? <span className="meta"> · PDL</span> : null}
         {finding.extra?.source === "whitepages" ? <span className="meta"> · Whitepages</span> : null}
       </div>
-      <div className="value">
-        {findingHref(finding) ? (
-          <a href={findingHref(finding)!} target="_blank" rel="noreferrer">
-            {finding.value || finding.url}
-          </a>
-        ) : (
-          finding.value
-        )}
-      </div>
+      <ValueRow finding={finding} />
+    </div>
+  );
+}
+
+function ValueRow({ finding, className }: { finding: Finding; className?: string }) {
+  const href = findingHref(finding);
+  const text = finding.value || finding.url;
+  return (
+    <div className={className ? `${className} value` : "value"}>
+      {href ? (
+        <a href={href} target="_blank" rel="noreferrer">
+          {text}
+        </a>
+      ) : (
+        text
+      )}
     </div>
   );
 }
@@ -512,12 +546,14 @@ function TrestleOwnerCard({ owner }: { owner: TrestleOwnerGroup }) {
       )}
       {owner.alternateNames.length > 0 && (
         <div className="trestle-alts">
-          {owner.alternateNames.map((alt) => (
-            <div className="finding trestle-alt" key={alt}>
-              <div className="title">Alternate name</div>
-              <div className="value">{alt}</div>
-            </div>
-          ))}
+          <div className="title">Aliases</div>
+          <div className="enumerated-values">
+            {owner.alternateNames.map((alt) => (
+              <div className="value" key={alt}>
+                {alt}
+              </div>
+            ))}
+          </div>
         </div>
       )}
       {owner.addresses.length > 0 && (

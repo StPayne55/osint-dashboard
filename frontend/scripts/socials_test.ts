@@ -114,6 +114,11 @@ assert.deepEqual(
 assert.equal(badges.find((row) => row.slug === "github")?.url, "https://github.com/stpayne55");
 assert.equal(badges.find((row) => row.slug === "instagram")?.url, null);
 assert.equal(badges.find((row) => row.slug === "x")?.site, "X");
+assert.deepEqual(
+  badges.map((row) => row.site),
+  ["GitHub", "Instagram", "Snapchat", "Spotify", "X", "Zombo"],
+);
+assert.ok(badges.every((row) => row.site.trim().length > 0));
 assert.equal(resolveSocialSite(unknownHit)?.slug, "zombo");
 assert.equal(collectConfirmedSocials([]).length, 0);
 

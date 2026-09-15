@@ -11,6 +11,8 @@
     "test:trestle": "node --experimental-strip-types scripts/trestle_test.ts",
     "test:phone": "node --experimental-strip-types scripts/phone_display_test.ts",
     "test:socials": "node --experimental-strip-types scripts/socials_test.ts",
+    "test:enumerated": "node --experimental-strip-types scripts/enumerated_fields_test.ts",
+    "test:modules": "node --experimental-strip-types scripts/modules_test.ts",
     "preview": "vite preview"
   },
   "dependencies": {
