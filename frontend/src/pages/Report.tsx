@@ -248,7 +248,7 @@ export function ReportPage() {
             <b>{emailCount}</b> Emails
           </span>
           <span>
-            <b>{profileFindings.length}</b> Profiles
+            <b>{profileFindings.length}</b> Socials
           </span>
           <span>
             <b>{photoItems.length}</b> Photos

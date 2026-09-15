@@ -612,17 +612,17 @@ a.btn:hover {
 }
 
 .identity-card {
-  margin-bottom: 16px;
-  padding: 12px 14px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
   background: var(--glass-strong);
   border: 1px solid var(--line);
   backdrop-filter: blur(12px);
 }
 
 .identity-name {
-  margin: 0 0 8px;
+  margin: 0 0 6px;
   font-family: var(--display);
-  font-size: clamp(18px, 3vw, 26px);
+  font-size: clamp(16px, 2.6vw, 24px);
   letter-spacing: 0.04em;
   color: var(--acid);
   text-shadow: 0 0 12px rgba(200, 255, 0, 0.28);
@@ -632,13 +632,20 @@ a.btn:hover {
 .identity-counts {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  gap: 6px;
 }
 
 .identity-counts span {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid rgba(0, 240, 255, 0.16);
+  background: rgba(0, 0, 0, 0.22);
   color: var(--muted);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -646,12 +653,12 @@ a.btn:hover {
 .identity-counts b {
   color: var(--cyan);
   font-family: var(--display);
-  font-size: 16px;
-  margin-right: 6px;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .identity-phone-meta {
-  margin: 8px 0 0;
+  margin: 6px 0 0;
   color: var(--dim);
   font-family: var(--mono);
   font-size: 11px;
@@ -1268,34 +1275,40 @@ a.btn:hover {
   }
 
   .identity-card {
-    margin-bottom: 10px;
-    padding: 10px 12px;
+    margin-bottom: 8px;
+    padding: 8px 10px;
   }
 
   .identity-name {
-    font-size: 18px;
-    margin-bottom: 6px;
+    font-size: 16px;
+    margin-bottom: 4px;
   }
 
   .identity-counts {
     gap: 4px;
   }
 
+  .identity-counts span {
+    padding: 3px 5px;
+    font-size: 9px;
+  }
+
   .identity-counts b {
-    font-size: 14px;
+    font-size: 13px;
   }
 
   .identity-phone-meta {
-    margin-top: 6px;
+    margin-top: 4px;
+    font-size: 10px;
   }
 
   .photo-strip {
-    margin-bottom: 10px;
+    margin-bottom: 8px;
   }
 
   .mod-list {
     position: static;
-    max-height: none;
+    max-height: 28vh;
   }
 
   .search-row button,
