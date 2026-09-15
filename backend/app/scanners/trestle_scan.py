@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime
 from typing import Any, Literal
 
 import httpx
@@ -17,6 +18,44 @@ from app.scanners.base import Scanner
 TRESTLE_REVERSE_PHONE_URL = "https://api.trestleiq.com/3.2/phone"
 
 _SOURCE = {"source": "trestle"}
+
+# Pass through only keys Trestle actually returned. Do not invent siblings.
+_ADDRESS_FIELD_KEYS = (
+    "id",
+    "location_type",
+    "street_line_1",
+    "street_line_2",
+    "city",
+    "postal_code",
+    "zip4",
+    "state_code",
+    "country_code",
+    "lat_long",
+    "accuracy",
+    "delivery_point",
+    "link_to_person_start_date",
+)
+
+_OWNER_FIELD_KEYS = (
+    "id",
+    "name",
+    "firstname",
+    "middlename",
+    "lastname",
+    "alternate_names",
+    "age_range",
+    "gender",
+    "type",
+    "link_to_phone_start_date",
+    "industry",
+)
+
+_ADDRESS_LIST_KEYS = (
+    "current_addresses",
+    "historical_addresses",
+    "associated_addresses",
+    "addresses",
+)
 
 
 def _api_key() -> str:
@@ -74,6 +113,74 @@ def _owner_name(owner: dict[str, Any]) -> str:
     return " ".join(p for p in parts if p)
 
 
+def _is_present(value: Any) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, bool) or isinstance(value, (int, float)):
+        return True
+    if isinstance(value, dict):
+        return any(_is_present(v) for v in value.values())
+    if isinstance(value, list):
+        return any(_is_present(v) for v in value)
+    return True
+
+
+def _present_value(value: Any) -> Any:
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, dict):
+        cleaned = {k: _present_value(v) for k, v in value.items() if _is_present(v)}
+        return cleaned
+    if isinstance(value, list):
+        return [_present_value(v) for v in value if _is_present(v)]
+    return value
+
+
+def _present_fields(row: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    for key in keys:
+        if key not in row:
+            continue
+        value = row[key]
+        if not _is_present(value):
+            continue
+        out[key] = _present_value(value)
+    return out
+
+
+def parse_link_date(value: Any) -> datetime | None:
+    """Parse Trestle ISO / date-only link dates. Empty or junk → None."""
+    text = _as_text(value)
+    if not text:
+        return None
+    normalized = text.replace("Z", "+00:00")
+    try:
+        dt = datetime.fromisoformat(normalized)
+    except ValueError:
+        try:
+            dt = datetime.strptime(text[:10], "%Y-%m-%d")
+        except ValueError:
+            return None
+    if dt.tzinfo is not None:
+        dt = dt.replace(tzinfo=None)
+    return dt
+
+
+def pick_current_address(addresses: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Newest link_to_person_start_date wins. Null dates rank older than any dated row."""
+    if not addresses:
+        return None
+
+    def _key(item: tuple[int, dict[str, Any]]) -> tuple[bool, datetime, int]:
+        index, row = item
+        parsed = parse_link_date(row.get("link_to_person_start_date"))
+        return (parsed is not None, parsed or datetime.min, -index)
+
+    return max(enumerate(addresses), key=_key)[1]
+
+
 def _format_address(row: dict[str, Any]) -> str:
     street = " ".join(
         p for p in (_as_text(row.get("street_line_1")), _as_text(row.get("street_line_2"))) if p
@@ -93,18 +200,11 @@ def _format_address(row: dict[str, Any]) -> str:
     return ", ".join(chunks)
 
 
-def _address_rows(owner: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
-    mapping = (
-        ("current_addresses", "Current address"),
-        ("historical_addresses", "Historical address"),
-        ("associated_addresses", "Associated address"),
-        ("addresses", "Address"),
-    )
-    rows: list[tuple[str, dict[str, Any]]] = []
+def collect_owner_addresses(owner: dict[str, Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
     seen: set[str] = set()
-    for key, title in mapping:
+    for key in _ADDRESS_LIST_KEYS:
         raw = owner.get(key)
-        items: list[Any]
         if isinstance(raw, list):
             items = raw
         elif isinstance(raw, dict):
@@ -115,10 +215,13 @@ def _address_rows(owner: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
             if not isinstance(item, dict):
                 continue
             label = _format_address(item)
-            if not label or label in seen:
+            if not label:
                 continue
-            seen.add(label)
-            rows.append((title, item))
+            dedupe = label.lower()
+            if dedupe in seen:
+                continue
+            seen.add(dedupe)
+            rows.append(item)
     return rows
 
 
@@ -153,7 +256,7 @@ def _emails_from(owner: dict[str, Any]) -> list[str]:
 def findings_from_reverse_phone(payload: dict[str, Any]) -> list[Finding]:
     """Emit only fields Trestle actually returned. Never invent a name or address."""
     findings: list[Finding] = []
-    seen: set[tuple[str, str, str]] = set()
+    seen: set[tuple[Any, ...]] = set()
 
     def _add(
         kind: Literal["email", "note", "metadata"],
@@ -164,7 +267,8 @@ def findings_from_reverse_phone(payload: dict[str, Any]) -> list[Finding]:
         text = value.strip()
         if not text:
             return
-        key = (kind, title, text.lower())
+        owner_idx = extra.get("owner_index") if extra else None
+        key = (kind, title, text.lower(), owner_idx)
         if key in seen:
             return
         seen.add(key)
@@ -187,10 +291,18 @@ def findings_from_reverse_phone(payload: dict[str, Any]) -> list[Finding]:
     if payload.get("is_commercial") is True:
         _add("metadata", "Commercial", "commercial line")
 
-    for owner in _owners(payload):
+    for owner_index, owner in enumerate(_owners(payload)):
         name = _owner_name(owner)
+        owner_fields = _present_fields(owner, _OWNER_FIELD_KEYS)
+        addresses = collect_owner_addresses(owner)
+        current = pick_current_address(addresses)
+
         if name:
-            extra: dict[str, Any] = {}
+            extra: dict[str, Any] = {
+                "finding_type": "trestle_owner",
+                "owner_index": owner_index,
+                "owner": owner_fields,
+            }
             owner_type = _as_text(owner.get("type"))
             if owner_type:
                 extra["owner_type"] = owner_type
@@ -199,26 +311,87 @@ def findings_from_reverse_phone(payload: dict[str, Any]) -> list[Finding]:
         for alt in owner.get("alternate_names") or []:
             alt_name = _as_text(alt)
             if alt_name and alt_name.lower() != name.lower():
-                _add("note", "Alternate name", alt_name)
+                _add(
+                    "note",
+                    "Alternate name",
+                    alt_name,
+                    {
+                        "finding_type": "trestle_owner_field",
+                        "owner_index": owner_index,
+                    },
+                )
 
-        for title, row in _address_rows(owner):
+        for row in addresses:
             formatted = _format_address(row)
+            fields = _present_fields(row, _ADDRESS_FIELD_KEYS)
+            is_current = row is current
             extra = {
-                k: v
-                for k, v in {
-                    "street": _as_text(row.get("street_line_1")),
-                    "city": _as_text(row.get("city")),
-                    "state": _as_text(row.get("state_code")),
-                    "zip": _as_text(row.get("postal_code")),
-                }.items()
-                if v
+                "finding_type": "trestle_address",
+                "owner_index": owner_index,
+                "is_current": is_current,
+                "fields": fields,
             }
+            if name:
+                extra["owner_name"] = name
+            for old_key, src_key in (
+                ("street", "street_line_1"),
+                ("city", "city"),
+                ("state", "state_code"),
+                ("zip", "postal_code"),
+            ):
+                text = _as_text(row.get(src_key))
+                if text:
+                    extra[old_key] = text
+            title = "Current address" if is_current else "Address"
             _add("note", title, formatted, extra)
 
         for email in _emails_from(owner):
-            _add("email", "Email", email)
+            _add(
+                "email",
+                "Email",
+                email,
+                {"finding_type": "trestle_owner_field", "owner_index": owner_index},
+            )
 
     return findings
+
+
+def owners_blob_from_findings(findings: list[Finding]) -> list[dict[str, Any]]:
+    """Compact owner/address JSON for export — only fields already on findings."""
+    owners: dict[int, dict[str, Any]] = {}
+    order: list[int] = []
+
+    def _bucket(index: int) -> dict[str, Any]:
+        if index not in owners:
+            owners[index] = {"owner_index": index, "addresses": []}
+            order.append(index)
+        return owners[index]
+
+    for finding in findings:
+        extra = finding.extra or {}
+        if extra.get("source") != "trestle":
+            continue
+        raw_index = extra.get("owner_index")
+        if not isinstance(raw_index, int):
+            continue
+        bucket = _bucket(raw_index)
+        ftype = extra.get("finding_type")
+        if ftype == "trestle_owner":
+            if finding.value:
+                bucket["name"] = finding.value
+            owner = extra.get("owner")
+            if isinstance(owner, dict) and owner:
+                bucket["fields"] = owner
+        elif ftype == "trestle_address":
+            fields = extra.get("fields") if isinstance(extra.get("fields"), dict) else {}
+            bucket["addresses"].append(
+                {
+                    "formatted": finding.value,
+                    "is_current": bool(extra.get("is_current")),
+                    "fields": fields,
+                }
+            )
+    return [owners[i] for i in order]
 
 
 def _error_message(payload: Any, status_code: int) -> str:
@@ -242,8 +415,9 @@ class TrestleReversePhoneScanner(Scanner):
     description = (
         "Optional. Phone → Trestle Reverse Phone "
         f"({TRESTLE_REVERSE_PHONE_URL}?phone=) when TRESTLE_API_KEY is set. "
-        "Emits owner names, current/associated addresses, emails, and brief "
-        "line metadata only when Trestle returns them. E.164 preferred. "
+        "Emits owner names and returned demographics, current/associated "
+        "addresses with Trestle address fields, emails, and brief line "
+        "metadata only when Trestle returns them. E.164 preferred. "
         "No key → skipped, no HTTP."
     )
     accepts = [QueryType.phone]
@@ -324,6 +498,7 @@ class TrestleReversePhoneScanner(Scanner):
             "phone_number": _as_text(data.get("phone_number")) or None,
             "is_valid": data.get("is_valid") if isinstance(data.get("is_valid"), bool) else None,
             "finding_count": len(findings),
+            "owners": owners_blob_from_findings(findings),
         }
         if findings:
             names = [f.value for f in findings if f.title == "Name"]

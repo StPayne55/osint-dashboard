@@ -17,6 +17,18 @@ export type Finding = {
   extra?: Record<string, unknown>;
 };
 
+/** Structured Trestle extras the report UI reads. Missing keys were not returned. */
+export type TrestleFindingExtra = {
+  source?: "trestle";
+  finding_type?: "trestle_owner" | "trestle_address" | "trestle_owner_field";
+  owner_index?: number;
+  owner_name?: string;
+  owner_type?: string;
+  is_current?: boolean;
+  fields?: Record<string, unknown>;
+  owner?: Record<string, unknown>;
+};
+
 export type ModuleStatus = {
   id: string;
   name: string;
