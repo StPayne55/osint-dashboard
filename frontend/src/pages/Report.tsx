@@ -11,14 +11,21 @@ import {
 } from "../lib/api";
 import { collectPhotoFindings, isImageDork, type PhotoItem } from "../lib/photos";
 import {
+  curatePhoneCardFindings,
+  formatPhoneNumber,
+  hasResolvedPhone,
+  PHONE_SCANNER_IDS,
+  pickBestCarrier,
+  pickBestLineType,
+  resolvePhoneFormatInput,
+} from "../lib/phoneDisplay";
+import {
   addressDisplayFields,
   groupTrestlePhoneFindings,
   isTrestleCurrentAddress,
   ownerDisplayFields,
   type TrestleOwnerGroup,
 } from "../lib/trestle";
-
-const PHONE_SCANNER_IDS = ["phone", "numverify", "twilio", "whitepages", "trestle"] as const;
 
 const SECTIONS: { id: string; title: string; kinds: Finding["kind"][]; scanners?: string[] }[] = [
   { id: "identity", title: "Identity summary", kinds: [] },
@@ -35,9 +42,6 @@ const SECTIONS: { id: string; title: string; kinds: Finding["kind"][]; scanners?
   { id: "dorks", title: "Search links / dorks", kinds: ["link"] },
   { id: "notes", title: "Notes", kinds: ["note", "breach"] },
 ];
-
-const PHONE_SECTION_BLURB =
-  "Free scanners give carrier, region, line type, and site registration. A subscriber name needs Twilio CNAM or optional Whitepages Pro (WHITEPAGES_API_KEY) / Trestle Reverse Phone (TRESTLE_API_KEY). Missing name/address fields stay empty — never invented. Manual reverse-lookup links are in Search links. No caller name on file means CNAM was empty (common for mobile numbers) — not an error.";
 
 const DORKS_SECTION_BLURB =
   "LinkedIn rows sit at the top for name, email, and username lookups. They open a Google profile dork or LinkedIn people search in your browser (login may be required). This desk never scrapes LinkedIn.";
@@ -154,6 +158,20 @@ export function ReportPage() {
     () => derivePhoneMeta(findings, report?.identity),
     [findings, report],
   );
+  const showPhoneSection = useMemo(
+    () => hasResolvedPhone(report?.query, report?.identity, findings),
+    [report, findings],
+  );
+  const formattedPhone = useMemo(
+    () => formatPhoneNumber(resolvePhoneFormatInput(report?.query, report?.identity, findings)),
+    [report, findings],
+  );
+  const sectionOrder = useMemo(() => {
+    const rest = SECTIONS.filter((s) => s.id !== "identity" && s.id !== "phone");
+    const phone = SECTIONS.find((s) => s.id === "phone");
+    if (showPhoneSection && phone) return [phone, ...rest];
+    return rest;
+  }, [showPhoneSection]);
   const running = modules.some((m) => m.status === "running" || m.status === "queued");
   const done = modules.filter((m) => !["queued", "running"].includes(m.status)).length;
   const pct = modules.length ? Math.round((done / modules.length) * 100) : 0;
@@ -253,7 +271,7 @@ export function ReportPage() {
           {phoneMeta.trestleOwner && phoneMeta.trestleOwner !== phoneMeta.callerName && (
             <div className="stat">
               <b>{phoneMeta.trestleOwner}</b>
-              <span>Owner name · Trestle</span>
+              <span>Owner name</span>
             </div>
           )}
           {phoneMeta.carrier && (
@@ -295,12 +313,7 @@ export function ReportPage() {
         </aside>
 
         <div>
-          <section className="section honesty">
-            <h3>Honesty</h3>
-            <p>{report.honesty}</p>
-          </section>
-
-          {SECTIONS.filter((s) => s.id !== "identity").map((section) => {
+          {sectionOrder.map((section) => {
             const rows = allFindings.filter((f) => {
               if (section.id === "social") {
                 return f.kind === "profile" && isConcreteProfileUrl(f.url);
@@ -320,11 +333,14 @@ export function ReportPage() {
               <section className="section" key={section.id} id={section.id}>
                 <h3>
                   {section.title}{" "}
-                  <span className="meta">{section.id === "images" ? photoItems.length : unique.length}</span>
+                  <span className="meta">
+                    {section.id === "images"
+                      ? photoItems.length
+                      : section.id === "phone"
+                        ? phoneSectionCount(unique, formattedPhone)
+                        : unique.length}
+                  </span>
                 </h3>
-                {section.id === "phone" && (
-                  <p className="section-blurb">{PHONE_SECTION_BLURB}</p>
-                )}
                 {section.id === "dorks" && (
                   <p className="section-blurb">{DORKS_SECTION_BLURB}</p>
                 )}
@@ -360,6 +376,8 @@ export function ReportPage() {
                       </div>
                     )}
                   </>
+                ) : section.id === "phone" ? (
+                  <PhoneOrFindingList items={unique} sectionId={section.id} formattedPhone={formattedPhone} />
                 ) : unique.length ? (
                   <PhoneOrFindingList items={unique} sectionId={section.id} />
                 ) : (
@@ -386,7 +404,15 @@ export function ReportPage() {
   );
 }
 
-function PhoneOrFindingList({ items, sectionId }: { items: Finding[]; sectionId: string }) {
+function PhoneOrFindingList({
+  items,
+  sectionId,
+  formattedPhone = "",
+}: {
+  items: Finding[];
+  sectionId: string;
+  formattedPhone?: string;
+}) {
   if (sectionId !== "phone") {
     return (
       <div className="findings">
@@ -397,9 +423,13 @@ function PhoneOrFindingList({ items, sectionId }: { items: Finding[]; sectionId:
     );
   }
   const { owners, leftover } = groupTrestlePhoneFindings(items);
+  const phoneRows = curatePhoneCardFindings(leftover, formattedPhone);
+  if (!phoneRows.length && !owners.length) {
+    return <p className="empty">No public hits in this section.</p>;
+  }
   return (
     <div className="findings">
-      {leftover.map((f, i) => (
+      {phoneRows.map((f, i) => (
         <FindingRow key={`${f.title}-${f.value}-${i}`} finding={f} sectionId={sectionId} />
       ))}
       {owners.map((owner) => (
@@ -409,6 +439,11 @@ function PhoneOrFindingList({ items, sectionId }: { items: Finding[]; sectionId:
   );
 }
 
+function phoneSectionCount(items: Finding[], formattedPhone: string): number {
+  const { owners, leftover } = groupTrestlePhoneFindings(items);
+  return curatePhoneCardFindings(leftover, formattedPhone).length + owners.length;
+}
+
 function FindingRow({ finding, sectionId }: { finding: Finding; sectionId: string }) {
   return (
     <div className={findingClassName(finding, sectionId)}>
@@ -416,7 +451,6 @@ function FindingRow({ finding, sectionId }: { finding: Finding; sectionId: strin
         {finding.title}
         {finding.extra?.source === "pdl" ? <span className="meta"> · PDL</span> : null}
         {finding.extra?.source === "whitepages" ? <span className="meta"> · Whitepages</span> : null}
-        {finding.extra?.source === "trestle" ? <span className="meta"> · Trestle</span> : null}
       </div>
       <div className="value">
         {findingHref(finding) ? (
@@ -437,10 +471,7 @@ function TrestleOwnerCard({ owner }: { owner: TrestleOwnerGroup }) {
   return (
     <div className="trestle-owner">
       <div className="trestle-owner-head">
-        <div className="title">
-          Name
-          <span className="meta"> · Trestle</span>
-        </div>
+        <div className="title">Name</div>
         <div className="value trestle-owner-name">{heading}</div>
       </div>
       {chips.length > 0 && (
@@ -495,7 +526,7 @@ function TrestleAddressRow({ finding }: { finding: Finding }) {
         <dl className="trestle-fields">
           {rows.map((row) => (
             <div key={row.key}>
-              <dt>{row.key}</dt>
+              <dt>{row.label}</dt>
               <dd>{row.value}</dd>
             </div>
           ))}
@@ -555,38 +586,31 @@ function derivePhoneMeta(
   findings: Record<string, Finding[]>,
   identity?: Report["identity"],
 ) {
-  let carrier = identity?.phone_carrier || "";
+  const phoneFindings = PHONE_SCANNER_IDS.flatMap((id) => findings[id] || []);
+  let carrier = pickBestCarrier(phoneFindings)?.value || identity?.phone_carrier || "";
   let region = identity?.phone_region || "";
-  let lineType = identity?.phone_line_type || "";
+  let lineType = pickBestLineType(phoneFindings)?.value || identity?.phone_line_type || "";
   let callerName = identity?.caller_name || "";
   let whitepagesOwner = "";
   let trestleOwner = "";
-  for (const id of PHONE_SCANNER_IDS) {
-    for (const f of findings[id] || []) {
-      const title = (f.title || "").trim().toLowerCase();
-      const extra = f.extra || {};
-      if (!carrier && (title === "carrier" || title === "carrier (dataset)") && f.value) {
-        carrier = f.value;
-      }
-      if (!region && (title === "region" || title === "location") && f.value) {
-        region = f.value;
-      }
-      if (!lineType && title === "line type" && f.value) {
-        lineType = f.value;
-      }
-      if (!callerName && f.kind === "metadata" && (title === "caller name (cnam)" || title === "caller name")) {
-        callerName = f.value;
-      }
-      if (!whitepagesOwner && extra.source === "whitepages" && title === "name" && f.value) {
-        whitepagesOwner = f.value;
-      }
-      if (!trestleOwner && extra.source === "trestle" && title === "name" && f.value) {
-        trestleOwner = f.value;
-      }
-      if (!carrier && typeof extra.carrier === "string") carrier = extra.carrier;
-      if (!region && typeof extra.region === "string") region = extra.region;
-      if (!lineType && typeof extra.line_type === "string") lineType = extra.line_type;
+  for (const f of phoneFindings) {
+    const title = (f.title || "").trim().toLowerCase();
+    const extra = f.extra || {};
+    if (!region && (title === "region" || title === "location") && f.value) {
+      region = f.value;
     }
+    if (!callerName && f.kind === "metadata" && (title === "caller name (cnam)" || title === "caller name")) {
+      callerName = f.value;
+    }
+    if (!whitepagesOwner && extra.source === "whitepages" && title === "name" && f.value) {
+      whitepagesOwner = f.value;
+    }
+    if (!trestleOwner && extra.source === "trestle" && title === "name" && f.value) {
+      trestleOwner = f.value;
+    }
+    if (!carrier && typeof extra.carrier === "string") carrier = extra.carrier;
+    if (!region && typeof extra.region === "string") region = extra.region;
+    if (!lineType && typeof extra.line_type === "string") lineType = extra.line_type;
   }
   return { carrier, region, lineType, callerName, whitepagesOwner, trestleOwner };
 }

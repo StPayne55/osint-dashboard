@@ -1107,16 +1107,6 @@ a.btn:hover {
   color: #9ffffe;
 }
 
-.honesty {
-  border-color: rgba(177, 76, 255, 0.4);
-  color: var(--muted);
-  font-size: 13px;
-}
-
-.honesty h3 {
-  color: var(--purple);
-}
-
 .modal-backdrop {
   position: fixed;
   inset: 0;

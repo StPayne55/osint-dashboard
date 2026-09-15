@@ -115,12 +115,15 @@ assert.equal(isTrestleCurrentAddress(grouped.owners[0].addresses[0]), true);
 assert.equal(isTrestleCurrentAddress(grouped.owners[0].addresses[1]), false);
 assert.equal(grouped.owners[1].name, "A Fraileigh");
 
-const ownerChips = ownerDisplayFields(grouped.owners[0].ownerFields);
+const ownerChips = ownerDisplayFields({
+  ...grouped.owners[0].ownerFields,
+  id: "Person.abc123",
+});
 assert.deepEqual(
   ownerChips.map((row) => row.key),
   ["age_range", "gender", "type", "link_to_phone_start_date"],
 );
-assert.ok(!ownerChips.some((row) => row.key === "firstname"));
+assert.ok(!ownerChips.some((row) => row.key === "firstname" || row.key === "id"));
 
 const currentFields = addressDisplayFields(current.extra?.fields as Record<string, unknown>);
 assert.deepEqual(
@@ -137,13 +140,24 @@ assert.deepEqual(
     "lat_long",
     "delivery_point",
     "link_to_person_start_date",
-    "id",
   ],
 );
+assert.equal(currentFields.find((row) => row.key === "street_line_1")?.label, "Street address");
+assert.equal(currentFields.find((row) => row.key === "street_line_2")?.label, "Address line 2");
+assert.equal(currentFields.find((row) => row.key === "postal_code")?.label, "ZIP / Postal code");
+assert.equal(currentFields.find((row) => row.key === "zip4")?.label, "ZIP+4");
+assert.equal(currentFields.find((row) => row.key === "state_code")?.label, "State");
+assert.equal(currentFields.find((row) => row.key === "lat_long")?.label, "Coordinates");
+assert.equal(currentFields.find((row) => row.key === "link_to_person_start_date")?.label, "Linked since");
+assert.ok(!currentFields.some((row) => row.key === "id"));
 assert.equal(formatTrestleField({ latitude: 42.3314, longitude: -83.0458, accuracy: "Rooftop" }), "42.3314, -83.0458 (Rooftop)");
 
 const sparse = addressDisplayFields({ city: "Detroit", invented: "" });
-assert.deepEqual(sparse, [{ key: "city", value: "Detroit" }]);
+assert.deepEqual(sparse, [{ key: "city", label: "City", value: "Detroit" }]);
+assert.deepEqual(
+  addressDisplayFields({ zip: "48201", latitude: 42.3, longitude: -83.0 }).map((row) => row.key),
+  ["postal_code", "lat_long"],
+);
 assert.equal(formatTrestleField(null), "");
 assert.equal(formatTrestleField(""), "");
 

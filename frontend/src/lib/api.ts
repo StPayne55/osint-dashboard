@@ -52,6 +52,8 @@ export type Query = {
   type: QueryType;
   email?: string | null;
   phone_e164?: string | null;
+  phone_national?: string | null;
+  phone_country_code?: string | null;
   username?: string | null;
   name?: string | null;
   domain?: string | null;
