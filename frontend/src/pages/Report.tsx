@@ -211,7 +211,7 @@ export function ReportPage() {
     <div>
       <div className="report-head">
         <div>
-          <p className="kicker">{running ? "Live uplink" : "Packet complete"}</p>
+          <p className="kicker">{running ? "Searching…" : "Ready"}</p>
           <h2>{report.query.raw}</h2>
           <p className="meta">
             type {report.query.type}

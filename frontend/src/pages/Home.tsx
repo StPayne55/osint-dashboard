@@ -61,13 +61,10 @@ export function Home() {
   return (
     <div>
       <section className="hero">
-        <p className="kicker">Self-hosted // public sources only</p>
-        <h2>People lookup from open-source OSINT — not a secret dossier.</h2>
+        <p className="kicker">Built for real lookups</p>
+        <h2>See who's behind a number or email.</h2>
         <p className="lede">
-          Enter a name, email, phone, or username. Modules such as Holehe, Sherlock,
-          Maigret, SpiderFoot (open source), Gravatar, and phone metadata run in
-          parallel and stream into a single report. Empty results stay empty.
-          Nothing is written to disk by default.
+          Search by name, email, phone, or username. What we find shows up. What we don't stays blank.
         </p>
       </section>
 
