@@ -49,7 +49,7 @@ const OWNER_FIELD_LABELS: Record<string, string> = {
   industry: "Industry",
 };
 
-const ID_VALUE_RE = /^(Location|Person)\.[A-Za-z0-9._-]+$/;
+const ID_VALUE_RE = /^(Location|Person|Business)\.[A-Za-z0-9._-]+$/i;
 
 export type TrestleOwnerGroup = {
   ownerIndex: number;
@@ -295,7 +295,10 @@ function ownerTypeOf(group: TrestleOwnerGroup, extra: Record<string, unknown>): 
 }
 
 export function isPersonOwner(owner: TrestleOwnerGroup): boolean {
-  return owner.ownerType.trim().toLowerCase() === "person";
+  const type = owner.ownerType.trim().toLowerCase();
+  if (type === "person") return true;
+  if (isBusinessOwner(owner)) return false;
+  return Boolean(owner.ownerFields.age_range || owner.ownerFields.gender);
 }
 
 export function isBusinessOwner(owner: TrestleOwnerGroup): boolean {

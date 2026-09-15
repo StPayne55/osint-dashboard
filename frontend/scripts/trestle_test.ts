@@ -132,6 +132,46 @@ assert.deepEqual(
   ownersForDisplay([grouped.owners[2]]).map((owner) => owner.name),
   ["Payne Stephen"],
 );
+
+const personPayne = finding({
+  title: "Name",
+  value: "Stephen Thomas Payne",
+  extra: {
+    source: "trestle",
+    finding_type: "trestle_owner",
+    owner_index: 0,
+    owner_type: "Person",
+    owner: { type: "Person", id: "Person.abc" },
+  },
+});
+const businessPayne = finding({
+  title: "Name",
+  value: "Payne Stephen",
+  extra: {
+    source: "trestle",
+    finding_type: "trestle_owner",
+    owner_index: 1,
+    owner_type: "Business",
+    owner: {
+      type: "Business",
+      id: "Business.69945dde-8672-3d78-8a30-69896d1c92d3",
+    },
+  },
+});
+const payneGroup = groupTrestlePhoneFindings([personPayne, businessPayne]);
+assert.deepEqual(
+  ownersForDisplay(payneGroup.owners).map((owner) => owner.name),
+  ["Stephen Thomas Payne"],
+);
+assert.deepEqual(
+  ownerDisplayFields(businessPayne.extra?.owner as Record<string, unknown>).map((row) => row.key),
+  ["type"],
+);
+assert.ok(
+  !ownerDisplayFields(businessPayne.extra?.owner as Record<string, unknown>).some((row) =>
+    /Business\./.test(row.value),
+  ),
+);
 assert.equal(grouped.owners[0].addresses[0].value, current.value);
 assert.equal(isTrestleCurrentAddress(grouped.owners[0].addresses[0]), true);
 assert.equal(isTrestleCurrentAddress(grouped.owners[0].addresses[1]), false);
