@@ -1065,6 +1065,70 @@ a.btn:hover {
   border-bottom: 0;
 }
 
+.social-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.social-badge {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  background: var(--glass-strong);
+  color: var(--cyan);
+  box-shadow: 0 0 14px rgba(0, 240, 255, 0.1);
+}
+
+a.social-badge {
+  color: var(--cyan);
+}
+
+a.social-badge:hover {
+  border-color: var(--cyan);
+  color: #9ffffe;
+  text-shadow: none;
+  box-shadow: 0 0 16px rgba(0, 240, 255, 0.22);
+}
+
+.social-badge svg {
+  width: 26px;
+  height: 26px;
+  fill: currentColor;
+}
+
+.social-badge-initial {
+  font-family: var(--display);
+  font-size: 16px;
+  letter-spacing: 0.04em;
+  color: var(--acid);
+  text-shadow: 0 0 10px rgba(200, 255, 0, 0.28);
+}
+
+.social-badge-check {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: 16px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #041218;
+  border: 1px solid var(--green);
+  color: var(--green);
+  box-shadow: 0 0 8px rgba(57, 255, 154, 0.4);
+}
+
+.social-badge-check svg {
+  width: 11px;
+  height: 11px;
+  fill: none;
+}
+
 .empty {
   color: var(--dim);
   font-style: italic;

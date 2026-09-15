@@ -5,6 +5,7 @@ import {
   curatePhoneCardFindings,
   formatPhoneNumber,
   friendlyCnamValue,
+  hasResolvedPersonName,
   hasResolvedPhone,
   isPhoneCardClutter,
   pickBestCarrier,
@@ -71,6 +72,21 @@ assert.deepEqual(
 );
 assert.equal(curated[0].value, "+1 248-520-6067");
 assert.equal(curated.find((row) => row.title === "Caller name (CNAM)")?.value, EMPTY_CNAM_DISPLAY);
+const hiddenEmptyCnam = curatePhoneCardFindings(leftovers, formatPhoneNumber({ e164: "+12485206067" }), [
+  "Stephen Thomas Payne",
+]);
+assert.ok(!hiddenEmptyCnam.some((row) => row.title === "Caller name (CNAM)"));
+const realCnam = [
+  ...leftovers.filter((row) => row.title !== "Caller name (CNAM)"),
+  finding({ title: "Caller name (CNAM)", value: "PAYNE STEPHEN J" }),
+];
+const keptCnam = curatePhoneCardFindings(realCnam, formatPhoneNumber({ e164: "+12485206067" }), [
+  "Stephen Thomas Payne",
+]);
+assert.equal(keptCnam.find((row) => row.title === "Caller name (CNAM)")?.value, "PAYNE STEPHEN J");
+assert.equal(hasResolvedPersonName("Stephen Thomas Payne"), true);
+assert.equal(hasResolvedPersonName("No Caller Name Resolved"), false);
+assert.equal(hasResolvedPersonName(""), false);
 assert.equal(curated.find((row) => row.title === "Line type")?.value, "Mobile");
 assert.equal(pickBestLineType(leftovers)?.value, "Mobile");
 assert.equal(pickBestCarrier(leftovers)?.value, "Trestle Telco");
