@@ -101,6 +101,13 @@ export function pickHeroName(...names: Array<string | null | undefined>): string
   return [...candidates].sort((a, b) => comparePersonNames(b, a))[0];
 }
 
+export function hasResolvedPersonName(...names: Array<string | null | undefined>): boolean {
+  return names.some((name) => {
+    const text = (name || "").trim();
+    return Boolean(text) && !isEmptyCnamValue(text);
+  });
+}
+
 export function scorePersonName(name: string): number {
   const tokens = nameTokens(name);
   const letters = name.replace(/[^A-Za-z]/g, "");
@@ -138,14 +145,20 @@ export function isEmptyCnamValue(value: string | null | undefined): boolean {
   return friendlyCnamValue(value) === EMPTY_CNAM_DISPLAY;
 }
 
-export function curatePhoneCardFindings(items: Finding[], formatted: string): Finding[] {
+export function curatePhoneCardFindings(
+  items: Finding[],
+  formatted: string,
+  resolvedNames: Array<string | null | undefined> = [],
+): Finding[] {
   const rows: Finding[] = [];
   if (formatted) {
     rows.push({ kind: "phone", title: "Formatted", value: formatted });
   }
 
   const cnam = pickCnam(items);
-  if (cnam) rows.push(cnam);
+  if (cnam && !(isEmptyCnamValue(cnam.value) && hasResolvedPersonName(...resolvedNames))) {
+    rows.push(cnam);
+  }
 
   const region = pickFirstTitle(items, ["region", "location"]);
   if (region) rows.push(cleanRow(region, "Region"));

@@ -10,6 +10,7 @@
     "test:photos": "node --experimental-strip-types scripts/photos_test.ts",
     "test:trestle": "node --experimental-strip-types scripts/trestle_test.ts",
     "test:phone": "node --experimental-strip-types scripts/phone_display_test.ts",
+    "test:socials": "node --experimental-strip-types scripts/socials_test.ts",
     "preview": "vite preview"
   },
   "dependencies": {

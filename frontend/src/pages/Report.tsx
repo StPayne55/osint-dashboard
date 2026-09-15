@@ -9,6 +9,7 @@ import {
   type Report,
   type ScanEvent,
 } from "../lib/api";
+import { SocialBadges } from "../components/SocialBadges";
 import { collectPhotoFindings, isImageDork, type PhotoItem } from "../lib/photos";
 import {
   curatePhoneCardFindings,
@@ -21,6 +22,11 @@ import {
   resolvePhoneFormatInput,
 } from "../lib/phoneDisplay";
 import {
+  collectConfirmedSocials,
+  isConcreteProfileUrl,
+  isConfirmedSocialFinding,
+} from "../lib/socials";
+import {
   addressDisplayFields,
   groupTrestlePhoneFindings,
   isTrestleCurrentAddress,
@@ -30,6 +36,8 @@ import {
   takeCompetingCallerName,
   type TrestleOwnerGroup,
 } from "../lib/trestle";
+
+export { isConcreteProfileUrl } from "../lib/socials";
 
 const SECTIONS: { id: string; title: string; kinds: Finding["kind"][]; scanners?: string[] }[] = [
   { id: "identity", title: "Identity summary", kinds: [] },
@@ -41,7 +49,7 @@ const SECTIONS: { id: string; title: string; kinds: Finding["kind"][]; scanners?
     kinds: ["phone", "metadata", "note"],
     scanners: [...PHONE_SCANNER_IDS],
   },
-  { id: "social", title: "Social profiles", kinds: ["profile"] },
+  { id: "social", title: "Socials", kinds: ["profile", "note"] },
   { id: "usernames", title: "Username candidates", kinds: ["username"] },
   { id: "dorks", title: "Search links / dorks", kinds: ["link"] },
   { id: "notes", title: "Notes", kinds: ["note", "breach"] },
@@ -52,22 +60,6 @@ const DORKS_SECTION_BLURB =
 
 const PHOTOS_SECTION_BLURB =
   "Public avatars only: Gravatar when the owner published one, plus display photos Maigret parsed from claimed profiles. Extra image/photo/avatar URLs on a finding are collected when they are concrete http(s) links. No LinkedIn, Google Images, or face-search scraping.";
-
-/** Homepage of a registrable domain (https://instagram.com/) is not a profile. */
-export function isConcreteProfileUrl(url?: string | null): boolean {
-  if (!url) return false;
-  try {
-    const parsed = new URL(url.includes("://") ? url : `https://${url}`);
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
-    const parts = parsed.pathname.split("/").filter(Boolean);
-    if (parts.length === 0) return false;
-    const home = new Set(["home", "index", "index.html", "index.htm", "login", "signup", "register", "about", "www"]);
-    if (parts.length === 1 && home.has(parts[0].toLowerCase())) return false;
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 export function ReportPage() {
   const { jobId } = useParams();
@@ -152,9 +144,17 @@ export function ReportPage() {
   }, [jobId]);
 
   const allFindings = useMemo(() => Object.values(findings).flat(), [findings]);
-  const profileFindings = useMemo(
-    () => allFindings.filter((f) => f.kind === "profile" && isConcreteProfileUrl(f.url)),
-    [allFindings],
+  const confirmedSocials = useMemo(() => collectConfirmedSocials(allFindings), [allFindings]);
+  const leftoverNotes = useMemo(
+    () =>
+      dedupe(
+        allFindings.filter((f) => {
+          if (f.kind !== "note" && f.kind !== "breach") return false;
+          if (PHONE_SCANNER_IDS.some((id) => (findings[id] || []).includes(f))) return false;
+          return !isConfirmedSocialFinding(f);
+        }),
+      ),
+    [allFindings, findings],
   );
   const photoItems = useMemo(() => collectPhotoFindings(allFindings), [allFindings]);
   const imageDorks = useMemo(() => allFindings.filter(isImageDork), [allFindings]);
@@ -186,11 +186,16 @@ export function ReportPage() {
   const emailCount = uniq(allFindings, "email").length || (report?.query.email ? 1 : 0);
   const modulesDone = modules.filter((m) => m.status === "success" || m.status === "empty").length;
   const sectionOrder = useMemo(() => {
-    const rest = SECTIONS.filter((s) => s.id !== "identity" && s.id !== "phone");
+    const rest = SECTIONS.filter((s) => {
+      if (s.id === "identity" || s.id === "phone") return false;
+      if (s.id === "social") return confirmedSocials.length > 0;
+      if (s.id === "notes") return leftoverNotes.length > 0;
+      return true;
+    });
     const phone = SECTIONS.find((s) => s.id === "phone");
     if (showPhoneSection && phone) return [phone, ...rest];
     return rest;
-  }, [showPhoneSection]);
+  }, [showPhoneSection, confirmedSocials.length, leftoverNotes.length]);
   const running = modules.some((m) => m.status === "running" || m.status === "queued");
   const done = modules.filter((m) => !["queued", "running"].includes(m.status)).length;
   const pct = modules.length ? Math.round((done / modules.length) * 100) : 0;
@@ -250,7 +255,7 @@ export function ReportPage() {
             <b>{emailCount}</b> Emails
           </span>
           <span>
-            <b>{profileFindings.length}</b> Socials
+            <b>{confirmedSocials.length}</b> Socials
           </span>
           <span>
             <b>{photoItems.length}</b> Photos
@@ -296,16 +301,12 @@ export function ReportPage() {
         <div>
           {sectionOrder.map((section) => {
             const rows = allFindings.filter((f) => {
-              if (section.id === "social") {
-                return f.kind === "profile" && isConcreteProfileUrl(f.url);
-              }
               if (section.scanners) {
                 const from = section.scanners.flatMap((id) => findings[id] || []);
                 return from.some((x) => x === f) && section.kinds.includes(f.kind);
               }
               if (section.id === "notes") {
-                if (!section.kinds.includes(f.kind)) return false;
-                return !PHONE_SCANNER_IDS.some((id) => (findings[id] || []).includes(f));
+                return leftoverNotes.includes(f);
               }
               return section.kinds.includes(f.kind);
             });
@@ -317,9 +318,11 @@ export function ReportPage() {
                   <span className="meta">
                     {section.id === "images"
                       ? photoItems.length
-                        : section.id === "phone"
+                      : section.id === "phone"
                         ? phoneSectionCount(unique, formattedPhone, heroName)
-                        : unique.length}
+                        : section.id === "social"
+                          ? confirmedSocials.length
+                          : unique.length}
                   </span>
                 </h3>
                 {section.id === "dorks" && (
@@ -357,6 +360,8 @@ export function ReportPage() {
                       </div>
                     )}
                   </>
+                ) : section.id === "social" ? (
+                  <SocialBadges items={confirmedSocials} />
                 ) : section.id === "phone" ? (
                   <PhoneOrFindingList
                     items={unique}
@@ -412,8 +417,9 @@ function PhoneOrFindingList({
   }
   const { owners, leftover } = groupTrestlePhoneFindings(items);
   const { primary, competing } = partitionOwnersByPrimary(owners, primaryName);
+  const resolvedNames = [primaryName, ...primary.map((owner) => owner.name), ...competing.map((owner) => owner.name)];
   const { rows: phoneRows, competingCnam } = takeCompetingCallerName(
-    curatePhoneCardFindings(leftover, formattedPhone),
+    curatePhoneCardFindings(leftover, formattedPhone, resolvedNames),
     primaryName,
   );
   if (!phoneRows.length && !primary.length && !competing.length && !competingCnam) {
@@ -456,8 +462,9 @@ function OtherPotentialMatches({
 function phoneSectionCount(items: Finding[], formattedPhone: string, primaryName = ""): number {
   const { owners, leftover } = groupTrestlePhoneFindings(items);
   const { primary, competing } = partitionOwnersByPrimary(owners, primaryName);
+  const resolvedNames = [primaryName, ...primary.map((owner) => owner.name), ...competing.map((owner) => owner.name)];
   const { rows, competingCnam } = takeCompetingCallerName(
-    curatePhoneCardFindings(leftover, formattedPhone),
+    curatePhoneCardFindings(leftover, formattedPhone, resolvedNames),
     primaryName,
   );
   return rows.length + primary.length + competing.length + (competingCnam ? 1 : 0);
