@@ -12,10 +12,6 @@ export function Info() {
       <section className="hero">
         <p className="kicker">Desk notes</p>
         <h2>What this can do</h2>
-        <p className="lede">
-          Public, open-source checks only. Empty modules stay empty. More detail lives
-          in Catalog for each scanner.
-        </p>
       </section>
       <article className="panel">
         <h3>What this can do</h3>
